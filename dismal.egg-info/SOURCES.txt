@@ -1,0 +1,14 @@
+setup.py
+dismal/__init__.py
+dismal/demography.py
+dismal/likelihood.py
+dismal/matrices.py
+dismal/metrics.py
+dismal/preprocess.py
+dismal/utils.py
+dismal.egg-info/PKG-INFO
+dismal.egg-info/SOURCES.txt
+dismal.egg-info/dependency_links.txt
+dismal.egg-info/top_level.txt
+tests/test_demography.py
+tests/test_matrices.py
