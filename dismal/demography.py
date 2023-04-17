@@ -119,10 +119,10 @@ class Demography:
 
         if optimisation_type == "basinhopping":
             minimizer_kwargs = dict(method=optimisation_algo, args=self.X, bounds=optim_bounds)
-            optimised = scipy.optimize.basinhopping(likelihood.composite_neg_ll, x0=np.array(self.initial_vals),
+            optimised = scipy.optimize.basinhopping(likelihood._composite_neg_ll, x0=np.array(self.initial_vals),
                                                     minimizer_kwargs=minimizer_kwargs)
         elif optimisation_type == "local":
-            optimised = scipy.optimize.minimize(likelihood.composite_neg_ll, x0=np.array(self.initial_vals),
+            optimised = scipy.optimize.minimize(likelihood._composite_neg_ll, x0=np.array(self.initial_vals),
                                                 method=optimisation_algo, args=self.X, bounds=optim_bounds)
         else:
             raise ValueError("Please specify 'local', 'basinhopping', or 'differential_evolution' optimisation")

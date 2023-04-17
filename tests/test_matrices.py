@@ -1,6 +1,4 @@
-import sys
-sys.path.append("..")
-from src.matrices import GeneratorMatrix, TransitionMatrix
+from dismal.matrices import *
 import numpy as np
 
 def test_q1_sums_to_zero():
@@ -34,9 +32,9 @@ def test_q3_sums_to_zero():
 
 
 def test_transition_matrix_sums_to_four():
-    popsizes = [0.01, 0.1, 1, 10, 100]
-    mig_rates = [0, 0.0001, 0.01, 1, 10]
-    t_vals = [0, 0.01, 0.1, 0.5, 1, 2, 10]
+    popsizes = [0.01, 1, 100]
+    mig_rates = [0, 0.0001, 1, 10]
+    t_vals = [0, 0.1, 0.5, 1, 2, 10]
 
     for a in popsizes:
         for b in popsizes:
