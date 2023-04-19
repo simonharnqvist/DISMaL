@@ -8,10 +8,7 @@ def _coalescent_time_to_generations(t, N):
 def _theta_to_mu(theta, N):
     return theta/(4*N)
 
-
-def _simulate_hap_pairs(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num_replicates, block_len, sampling_type, pop=None):
-    """Simulate replicates of two sequences"""
-
+def msprime_simulate(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num_replicates, block_len):
     demography = msprime.Demography()
     demography.add_population(name="a", initial_size=a*N)
     demography.add_population(name="b1", initial_size=N)
@@ -27,35 +24,22 @@ def _simulate_hap_pairs(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num
     demography.set_migration_rate("c2", "c1", m2_prime)
     demography.sort_events()
 
-    if sampling_type == "between":
-        n_c1 = 1
-        n_c2 = 1
-    elif sampling_type == "within" and pop == "c1":
-        n_c1 = 2
-        n_c2 = 0
-    elif sampling_type == "within" and pop == "c2":
-        n_c1 = 0
-        n_c2 = 2
-    else:
-        raise ValueError("Please specify either 'between' or 'within' sampling, and if 'within', specify population 'c1' or 'c2'")
+    ts_state1 = msprime.sim_ancestry(samples={'c1':2, 'c2':0}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=1)
+    ts_state2 = msprime.sim_ancestry(samples={'c1':0, 'c2':2}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=1)
+    ts_state3 = msprime.sim_ancestry(samples={'c1':1, 'c2':1}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=1)
 
-    ts_generator = msprime.sim_ancestry(samples={'c1':n_c1, 'c2':n_c2}, demography=demography, sequence_length=block_len, num_replicates=num_replicates)
     mutation_rate = _theta_to_mu(theta, N)
     s = []
-    for ts in ts_generator:
-        mts = msprime.sim_mutations(ts, rate=mutation_rate, discrete_genome=False)
-        s.append(mts.get_num_mutations())
 
-    return s
+    s_dicts = []
+    for ts_state in [ts_state1, ts_state2, ts_state3]:
+        s = []
+        for ts in ts_state:
+            mts = msprime.sim_mutations(ts, rate=mutation_rate, discrete_genome=False)
+            s.append(mts.get_num_mutations())
+        s_dicts.append(preprocess.counts_to_dict(s))
 
-def msprime_simulate(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num_replicates, block_len):
-
-    s1 = _simulate_hap_pairs(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num_replicates, block_len, sampling_type = "within", pop="c1")
-    s2 = _simulate_hap_pairs(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num_replicates, block_len, sampling_type = "within", pop="c2")
-    s3 = _simulate_hap_pairs(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num_replicates, block_len, sampling_type = "between")
-
-    X = [preprocess.counts_to_dict(s) for s in [s1, s2, s3]]
-    return X
+    return s_dicts
 
 
 

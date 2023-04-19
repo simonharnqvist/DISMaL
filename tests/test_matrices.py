@@ -51,5 +51,28 @@ def test_transition_matrix_sums_to_four():
                                                     q1 = GeneratorMatrix(matrix_type="Q1", c1=c1, c2=c2, m1_prime=m1_prime, m2_prime=m2_prime)
                                                     q2 = GeneratorMatrix(matrix_type="Q2", b=b, m1=m1, m2=m2)
                                                     q3 = GeneratorMatrix(matrix_type="Q3", a=a)
-                                                    assert round(TransitionMatrix(q1=q1, q2=q2, q3=q3,t=t, tau1=tau1, tau0=tau0).sum()) == 4
+                                                    assert round(TransitionMatrix(q1=q1, q2=q2, q3=q3,t=t, tau1=tau1, tau0=tau0).sum(), 10) == 4
+
+# def test_p1():
+#     # Set of parameters known to cause errors in P1
+#     s=0
+#     a=2.803066955313531
+#     b=8.86450716120465e-11
+#     c1=0.8610691592835797
+#     c2=1.4641559116241056
+#     tau1=8.86450716120465e-11
+#     tau0=1.7621783109489693
+#     m1=0
+#     m2=0
+#     m1_prime=0
+#     m2_prime=0
+#     theta=1.128094299902516
+#     state=2
+
+#     q1 = GeneratorMatrix(m1_prime=m1_prime, m2_prime=m2_prime, c1=c1, c2=c2, matrix_type="Q1")
+#     q2 = GeneratorMatrix(m1=m1, m2=m2, b=b, matrix_type="Q2")
+#     q3 = GeneratorMatrix(a=a, matrix_type="Q3")
+#     p1 = TransitionMatrix(q1, q2, q3, t=tau1, tau1=tau1, tau0=tau0)
+
+        
                                     

@@ -1,5 +1,6 @@
 from dismal.likelihood import _expected_gs_u, _lambda_summation, _pdf_gs, _pdf_s, _sval_likelihood
 from math import exp
+import numpy as np
 
 def test_expected_gs_u_evals_cf_matlab():
     assert _expected_gs_u(s=1, theta=1, lmbda=1) == 0.25
@@ -34,15 +35,17 @@ def test_pdf_s_state2_mirrors_state1():
         p_s2 = _pdf_s(s=s, a=1, b=1, c1=1, c2=1, tau1=1, tau0=2, m1=0, m2=0, m1_prime=0, m2_prime=0, theta=5, state=2)
         assert p_s1 == p_s2
 
-def test_sval_likelihood_count1_equal_to_pdf_s():
-    assert all([_sval_likelihood(s_val=s, s_count=1, params=[1,1,1,1,1,2,0,0,0,0,5],
-                                  state=1) == _pdf_s(s=s, a=1, b=1, c1=1, c2=1, tau1=1,
-                                                     tau0=2, m1=0, m2=0, m1_prime=0, m2_prime=0, theta=5, state=1)
+def test_sval_likelihood_count1_equal_to_log_pdf_s():
+    assert all([_sval_likelihood(s_val=s, s_count=1, params={"a":1,"b":1,"c1":1,"c2":1,"tau1":1,"tau0":2,"m1":0,"m2":0,"m1_prime":0,"m2_prime":0,"theta":5},
+                                  state=1) == np.log(_pdf_s(s=s, a=1, b=1, c1=1, c2=1, tau1=1,
+                                                     tau0=2, m1=0, m2=0, m1_prime=0, m2_prime=0, theta=5, state=1))
                                                        for s in [0, 1, 10, 50]])
 
-def test_sval_likelihood_count_is_multiplier_of_pdf_s():
+def test_sval_likelihood_count_is_log_multiplier_of_pdf_s():
     for s in [0, 1, 10, 50]:
         p_s = _pdf_s(s=s, a=1, b=1, c1=1, c2=1, tau1=1, tau0=2, m1=0, m2=0, m1_prime=0, m2_prime=0, theta=5, state=1)
-        assert _sval_likelihood(s_val=s, s_count=10, params=[1,1,1,1,1,2,0,0,0,0,5], state=1) == 10 * p_s
+        assert _sval_likelihood(s_val=s, s_count=10,
+                                 params={"a":1,"b":1,"c1":1,"c2":1,"tau1":1,"tau0":2,"m1":0,"m2":0,"m1_prime":0,"m2_prime":0,"theta":5},
+                                   state=1) == 10 * np.log(p_s)
 
 

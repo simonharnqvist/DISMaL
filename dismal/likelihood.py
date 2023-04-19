@@ -2,9 +2,10 @@ import math
 from math import factorial
 from mpmath import exp
 import numpy as np
-from utils import opt_to_model_params
+from utils import _opt_to_model_params, _model_to_opt_params
 import matrices
 import itertools
+import scipy
 
 def _expected_gs_u(s, theta, lmbda):
     """ Calculate the expected number of mutations for a fixed time span.
@@ -26,6 +27,7 @@ def _lambda_summation(l, theta, lmbda, t):
     lmbda -- rate parameter of Poisson distribution
     t -- time span in coalescent units
     """
+    assert l < 100, f"Your s-values are too high (s={l} detected). Consider using smaller blocks."
     return sum([(((lmbda+theta)**s) * t**s) / factorial(s) for s in range(0, l+1)])
 
 def _pdf_gs(s, theta, lmbda, t=None):
@@ -66,6 +68,16 @@ def _pdf_s(s, a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta, state
     i = state-1
     s = int(s)
 
+    if m1 is None:
+        m1 = 0
+    if m2 is None:
+        m2 = 0
+    if m1_prime is None:
+        m1_prime = 0
+    if m2_prime is None:
+        m2_prime = 0
+    assert not None in [s, a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta, state]
+
     q1 = matrices.GeneratorMatrix(m1_prime=m1_prime, m2_prime=m2_prime, c1=c1, c2=c2, matrix_type="Q1")
     q2 = matrices.GeneratorMatrix(m1=m1, m2=m2, b=b, matrix_type="Q2")
     q3 = matrices.GeneratorMatrix(a=a, matrix_type="Q3")
@@ -94,6 +106,8 @@ def _pdf_s(s, a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta, state
 
     pr_s = float(-term1-term2+term3)
 
+    assert 0 <= pr_s <= 1, f"Probabilities outside range [0,1]: p={pr_s}, term1={term1}, term2={term2}, term3={term3} for parameters {[s, a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta, state]}"
+
     return pr_s
 
 
@@ -103,39 +117,106 @@ def _sval_likelihood(s_val, s_count, params, state):
     Keyword arguments:
     s_val -- the number of nucleotide differences (the likelihood of which is calculated)
     s_counts -- the count of that value of s (i.e. how many times does that value of s occur in that state)
-    params -- parameters [a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta]
+    params -- dictionary of model parameters
     state -- sampling state {1,2,3} where 1 means that both blocks are sampled from population 1, 2 means that both blocks are sampled from population 2, and 3 means one block per population
     """
-    a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta = params
+
+    assert isinstance(params, dict), f"{params}"
+
+    a = params["a"]
+    b = params["b"]
+    c1 = params["c1"]
+    c2 = params["c2"]
+    tau1 = params["tau1"]
+    tau0 = params["tau0"]
+    theta = params["theta"]
+
+    if "m1" in list(params.keys()):
+        m1 = params["m1"]
+    else:
+        m1 = 0
+    if "m2" in list(params.keys()):
+        m2 = params["m2"]
+    else:
+        m2 = 0
+    if "m1_prime" in list(params.keys()):
+        m1_prime = params["m1_prime"]
+    else:
+        m1_prime = 0
+    if "m2_prime" in list(params.keys()):
+        m2_prime = params["m2_prime"]
+    else:
+        m2_prime = 0
+
+
     p_s = _pdf_s(a=a, b=b, c1=c1, c2=c2, tau0=tau0, tau1 = tau1, m1=m1, m2=m2, m1_prime=m1_prime, m2_prime=m2_prime, theta=theta, state=state, s=s_val)
-    likelihood = p_s * s_count
-    return likelihood
+    assert 0 <= p_s <= 1, f"Probabilities outside range [0,1]: p={p_s} for parameters {params}"
+
+    logL = np.log(p_s) * s_count
+    assert logL < 0, "Positive log-likelihood detected - (positive) log-likelihoods must be negative"
+    return logL
 
 
-def _composite_neg_ll(params, X, verbose=True):
+def _composite_neg_ll(params, X, parameter_names, verbose=True):
     """ Calculate the composite negative log likelihood of a parameter set, given dataset X.
 
     Keyword arguments:
-    params -- parameters [a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta]
+    params -- optimisation parameters [theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star]
     X -- list of three dictionaries, each containing key-value pairs where the key is s, the number of differences, and the value is the corresponding count
     verbose -- whether to output parameter values and log-likelihoods during fitting
     """
     # Check for NaNs in input
-    params = [0 if math.isnan(param) else param for param in params]
+    params = [0 if math.isnan(float(param)) else float(param) for param in params]
+
+    param_dict = dict(zip(parameter_names, params))
 
     # Convert params for likelihood function
-    model_params = opt_to_model_params(params)
-    assert not any([np.isnan(param) for param in model_params]), f"NaN values in converted model params {model_params}; original params {params}"
+    model_params = _opt_to_model_params(param_dict)
+    assert not any([np.isnan(param) for param in list(model_params.values())]), f"NaN values in converted model params {model_params}; original params {params}"
 
+    assert isinstance(model_params, dict)
     # Multiply each s by likelihood of that s, and sum to generate composite LL
-    likelihoods = list(itertools.chain(*[[_sval_likelihood(s_val = s, s_count=X[state-1][s], params = model_params, state=state) for s in X[state-1].keys()] 
+    log_likelihoods = list(itertools.chain(*[[_sval_likelihood(s_val = s, s_count=X[state-1][s], params = model_params, state=state) for s in X[state-1].keys()] 
                                          for state in [1,2,3]]))
-    negll = np.sum(-np.log(likelihoods))
+    assert all(i < 0 for i in log_likelihoods), f"Positive log-likelihood detected - (positive) log-likelihoods must be negative: {log_likelihoods}"
+
+    negll = -np.sum(log_likelihoods)
 
     if verbose:
         print(f"Parameters: {model_params}, -lnL: {negll}")
 
+    assert negll > 0, "Negative -negll detected; negative log-likelihoods must be positive"
+
     return negll
+
+def _optimise_negll(X, initial_vals, lower_bounds, optimisation_algo, verbose):
+    """ Optimise negative log likelihood.
+        
+    Keyword arguments:
+    X -- list of dictionaries of s values
+    initial_vals -- dict of initial values in model parameters
+    lower_bounds -- dict of lower bounds in model parameters
+    optimisation_algo -- which algo to use (see scipy.optimize.minimize)
+    """
+
+    # Convert to optimisation parameters
+    opt_iv = _model_to_opt_params(initial_vals)
+    opt_lb = _model_to_opt_params(lower_bounds)
+
+    parameter_names = list(opt_iv.keys())
+    upper_bounds = [None] * len(parameter_names)
+    bounds = tuple(zip(list(opt_lb.values()), upper_bounds))
+        
+    optimised = scipy.optimize.minimize(_composite_neg_ll, x0=np.array(list(opt_iv.values())),
+                                                method=optimisation_algo,
+                                                args=(X, parameter_names, verbose),
+                                                bounds=bounds)
+    inferred_params = _opt_to_model_params(dict(zip(parameter_names, optimised.x)))
+    negll = optimised.fun
+
+    assert optimised.success, f"Optimisation failed: {optimised.message}"
+
+    return inferred_params, negll
 
 
 def _coal_time_pdf(t, tau1, tau0, a, b, c1, c2, m1_prime, m2_prime, m1, m2, init_state):

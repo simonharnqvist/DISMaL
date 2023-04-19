@@ -15,3 +15,4 @@ dismal.egg-info/top_level.txt
 tests/test_demography.py
 tests/test_likelihood.py
 tests/test_matrices.py
+tests/test_utils.py
