@@ -112,7 +112,10 @@ def _pdf_s(s, a, b, c1, c2, tau1, tau0, m1, m2, m1_prime, m2_prime, theta, state
 
 
 def _sval_likelihood(s_val, s_count, params, state):
+   
     """ Calculate the likelihood of a given value of s.
+    KL: careful with the wording: a value of S has a probability (given parameters)
+    parameters have a likelihood (given a values of S).... 
 
     Keyword arguments:
     s_val -- the number of nucleotide differences (the likelihood of which is calculated)
@@ -158,7 +161,7 @@ def _sval_likelihood(s_val, s_count, params, state):
 
 
 def _composite_neg_ll(params, X, parameter_names, verbose=True):
-    """ Calculate the composite negative log likelihood of a parameter set, given dataset X.
+    """ Calculate the composite log likelihood of a parameter set, given dataset X.
 
     Keyword arguments:
     params -- optimisation parameters [theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star]
@@ -175,7 +178,7 @@ def _composite_neg_ll(params, X, parameter_names, verbose=True):
     assert not any([np.isnan(param) for param in list(model_params.values())]), f"NaN values in converted model params {model_params}; original params {params}"
 
     assert isinstance(model_params, dict)
-    # Multiply each s by likelihood of that s, and sum to generate composite LL
+    # Multiply each s count by the probability of that s, and sum to generate composite LL
     log_likelihoods = list(itertools.chain(*[[_sval_likelihood(s_val = s, s_count=X[state-1][s], params = model_params, state=state) for s in X[state-1].keys()] 
                                          for state in [1,2,3]]))
     assert all(i < 0 for i in log_likelihoods), f"Positive log-likelihood detected - (positive) log-likelihoods must be negative: {log_likelihoods}"
