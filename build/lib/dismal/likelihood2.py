@@ -1,12 +1,7 @@
 import numpy as np
 from scipy import linalg
 from scipy.stats import poisson
-
-def matrix_manipulations(matrix):
-    eigenvals, eigenvects = linalg.eig(matrix, left=False, right=True)
-    eigenvects = eigenvects.transpose()
-    inv = linalg.inv(matrix)
-    return eigenvals, eigenvects, inv
+from generator_matrix import GeneratorMatrix
 
 def p_matrix(matrix, inv_matrix, eigenvalues, t):
     return inv_matrix @ np.diag(np.exp(eigenvalues * t)) @ matrix
@@ -33,7 +28,28 @@ def gamma_matrix(gamma, s_vals,  t0, rel_mu=1):
     return np.transpose(np.array(gammas))
 
 def likelihood_matrix(q1, q2, q3, t1, v, S):
-    """Produce matrix [s,i] = L, where L is the likelihood of parameters given s nt differences and state i """
+    g, eigvals_q1 = q1.eigen()
+    c, eigvals_q2 = q2.eigen()
+    ginv = linalg.inv(g)
+    cinv = linalg.inv(c)
+    alpha = -eigvals_q1[0:3]
+    beta = -eigvals_q2[0:3]
+    gamma = 1/q3.pop_size1 #1/a
+
+    gg = -ginv @ np.diag(g[:,3])
+    cc = -cinv @ np.diag(c[:,3])
+    pij1 = p_matrix(g, ginv, eigvals_q1, t1)
+    pij2 = p_matrix(c, cinv, eigvals_q2, v)
+
+    ll_matrix = np.array([-np.log(gg[i, 0:3] @ alpha_matrix(alpha, S[i], t1)
+                         + pij1[i, 0:3] @ cc[0:3, 0:3] @ beta_matrix(beta, S[i], t1=t1, t0=(v+t1)) +
+                         (1 - (pij1@pij2)[i,3]) * gamma_matrix(gamma, S[i], t1+v)) for i in [0, 1, 2]])
+    
+    return ll_matrix
+
+def neg_likelihood(q1, q2, q3, t1, v, s_vals, state):
+
+    i = state-1
 
     g, eigvals_q1 = q1.eigen()
     c, eigvals_q2 = q2.eigen()
@@ -41,19 +57,31 @@ def likelihood_matrix(q1, q2, q3, t1, v, S):
     cinv = linalg.inv(c)
     alpha = -eigvals_q1[0:3]
     beta = -eigvals_q2[0:3]
-    gamma = 1 #1/q3.pop_size1 #1/a
+    gamma = 1/q3.pop_size1 #1/a
 
-    gg = ginv @ np.diag(g[:,3])
-    cc = cinv @ np.diag(c[:,3])
+    gg = -ginv @ np.diag(g[:,3])
+    cc = -cinv @ np.diag(c[:,3])
     pij1 = p_matrix(g, ginv, eigvals_q1, t1)
     pij2 = p_matrix(c, cinv, eigvals_q2, v)
 
-    ll_matrix = [] # shape = s_val x state
-    for i in [0, 1, 2]: # per state
-        ll_matrix.append(gg[i, 0:3] @ alpha_matrix(alpha, S[i], t1)
-                                + pij1[i, 0:3] @ cc[0:3, 0:3] @ beta_matrix(beta, S[i], t1=t1, t0=(v+t1)) +
-                                (1 - (pij1@pij2)[i,3]) * gamma_matrix(gamma,S[i],t1+v))
+    return -np.sum(np.log(gg[i, 0:3] @ alpha_matrix(alpha, s_vals, t1)
+                         + pij1[i, 0:3] @ cc[0:3, 0:3] @ beta_matrix(beta, s_vals, t1=t1, t0=(v+t1)) +
+                         (1 - (pij1@pij2)[i,3]) * gamma_matrix(gamma, s_vals, t1+v)))
+
+def composite_neg_ll(params, S):
+    """S = matrix of s_counts per state and s_value"""
+
+    theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star = params
+
+    q1 = GeneratorMatrix(matrix_type='Q1', theta1=theta1, theta1_prime=theta1_prime, theta2_prime=theta2_prime,
+                          m1_prime_star=m1_prime_star, m2_prime_star=m2_prime_star)
+    q2 = GeneratorMatrix(matrix_type='Q2', theta1=theta1, theta2=theta2, m1_star=m1_star, m2_star=m2_star)
+    q3 = GeneratorMatrix(matrix_type='Q3', theta1=theta1, theta0=theta0)
+
+    ll_matrix = likelihood_matrix(q1, q2, q3, t1, v, S)
     
-    return ll_matrix
+    return np.sum(ll_matrix * S)
+
+
 
 

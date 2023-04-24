@@ -27,7 +27,7 @@ class InferredDemography:
 class Demography:
 
 
-    def __init__(self, X, model=None,
+    def __init__(self, S, model=None,
                  set_m1_star_zero = False, set_m2_star_zero = False,
                    set_m1_prime_star_zero = False, set_m2_prime_star_zero = False, no_migration=False):
 
@@ -60,7 +60,7 @@ class Demography:
             self.set_m1_prime_star_zero = set_m1_prime_star_zero
             self.set_m2_prime_star_zero = set_m2_prime_star_zero
 
-        self.X = X
+        self.S = S
 
     #     self.res = self.infer_parameters()
     #
@@ -78,33 +78,30 @@ class Demography:
                                  "t1":t1_iv, "v":v_iv, "m1_star":m1_star_iv, "m2_star":m2_star_iv, "m1_prime_star":m1_prime_star_iv, "m2_prime_star":m2_prime_star_iv}
         lower_bounds = {"theta0":theta0_lb, "theta1":theta1_lb, "theta2":theta2_lb, "theta1_prime":theta1_prime_lb, "theta2_prime":theta2_prime_lb,
                                  "t1":t1_lb, "v":v_lb, "m1_star":m1_star_lb, "m2_star":m2_star_lb, "m1_prime_star":m1_prime_star_lb, "m2_prime_star":m2_prime_star_lb}
+        upper_bounds = {"theta0":None, "theta1":None, "theta2":None, "theta1_prime":None, "theta2_prime":None,
+                                 "t1":None, "v":None, "m1_star":None, "m2_star":None, "m1_prime_star":None, "m2_prime_star":None}
+        
+        
+        mig_rates = ["m1_star", "m2_star", "m1_prime_star", "m2_prime_star"]
+        mig_set_zero = [self.set_m1_star_zero, self.set_m2_star_zero, self.set_m1_prime_star_zero, self.set_m2_prime_star_zero]
 
-
-        # Remove migration rate from model if disallowed
-        constraints = [self.set_m1_star_zero, self.set_m2_star_zero, self.set_m1_prime_star_zero, self.set_m2_prime_star_zero]
-        mig_params = ["m1_star", "m2_star", "m1_prime_star", "m2_prime_star"]
         for i in range(0,4):
-                if constraints[i]:
-                    initial_values.pop(mig_params[i])
-                    lower_bounds.pop(mig_params[i])
+            if mig_set_zero[i]:
+                initial_values[mig_rates[i]] = 0
+                lower_bounds[mig_rates[i]] = 0
+                upper_bounds[mig_rates[i]] = 0
+
+
+        n_params = 11 - len([i for i in [self.set_m1_star_zero, self.set_m2_star_zero, self.set_m1_prime_star_zero, self.set_m2_prime_star_zero] if i])
+
         
-        n_params = len(list(initial_values.keys()))
-        assert n_params == len(list(lower_bounds.keys()))
+        inferred_params, negll = likelihood.optimise_neg_ll(self.S, list(initial_values.values()), list(lower_bounds.values()), list(upper_bounds.values()), optimisation_algo, verbose=verbose)
 
-        print(f"params in model: {list(initial_values.keys())}, with initial values {list(initial_values.values())} and lower bounds {list(lower_bounds.values())}")
-
-        p, negll = likelihood._optimise_negll(X=self.X, initial_vals=initial_values, lower_bounds=lower_bounds, optimisation_algo=optimisation_algo, verbose=verbose)
-        inferred_params = dict(zip(list(initial_values.keys()), p))
-        
-        for p in ["m1_star", "m2_star", "m1_prime_star", "m2_prime_star"]:
-            if p not in list(inferred_params.keys()):
-                inferred_params[p] = 0
-
-        return InferredDemography(theta0=inferred_params["theta0"], theta1=inferred_params["theta1"], theta2=inferred_params["theta2"],
-                                    theta1_prime=inferred_params["theta1_prime"], theta2_prime=inferred_params["theta2_prime"],
-                                      t1=inferred_params["t1"], v=inferred_params["v"], m1_star=inferred_params["m1_star"],
-                                        m2_star=inferred_params["m2_star"], m1_prime_star=inferred_params["m1_prime_star"],
-                                          m2_prime_star=inferred_params["m2_prime_star"], negll=negll, n_params=n_params)
+        return InferredDemography(theta0=inferred_params[0], theta1=inferred_params[1], theta2=inferred_params[2],
+                                    theta1_prime=inferred_params[3], theta2_prime=inferred_params[4],
+                                      t1=inferred_params[5], v=inferred_params[6], m1_star=inferred_params[7],
+                                        m2_star=inferred_params[8], m1_prime_star=inferred_params[9],
+                                          m2_prime_star=inferred_params[10], negll=negll, n_params=n_params)
 
 
 

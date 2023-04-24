@@ -140,6 +140,10 @@ def _pdf_s(s, state, theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, 
 def p1(i,j,k, g, ginv, alpha, t):
     return ginv[i,k] * g[k,j] * math.exp(-alpha[k]*t)
 
+<<<<<<< HEAD
+def _sval_likelihood(s_val, s_count, params, state):
+   
+=======
 def p2(j,l, k, c, cinv, beta, t):
     return cinv[j,k] * c[k,l] * math.exp(-beta[k]*t)
 
@@ -186,7 +190,10 @@ def p2(j,l, k, c, cinv, beta, t):
 
 
 def _sval_likelihood(s_count, s, state, theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star):
+>>>>>>> 26db1e7 (new ll fxn implementation)
     """ Calculate the likelihood of a given value of s.
+    KL: careful with the wording: a value of S has a probability (given parameters)
+    parameters have a likelihood (given a values of S).... 
 
     Keyword arguments:
     s_val -- the number of nucleotide differences (the likelihood of which is calculated)
@@ -204,8 +211,13 @@ def _sval_likelihood(s_count, s, state, theta0, theta1, theta2, theta1_prime, th
     return logL
 
 
+<<<<<<< HEAD
+def _composite_neg_ll(params, X, parameter_names, verbose=True):
+    """ Calculate the composite log likelihood of a parameter set, given dataset X.
+=======
 def _composite_neg_ll(param_vals, param_names, X, verbose=True):
     """ Calculate the composite negative log likelihood of a parameter set, given dataset X.
+>>>>>>> 26db1e7 (new ll fxn implementation)
 
     Keyword arguments:
     param_vals -- parameters [theta0, theta1, theta2, theta1_prime, theta2_prime, t1] and optionally [m1_star, m2_star, m1_prime_star, m2_prime_star]
@@ -226,6 +238,11 @@ def _composite_neg_ll(param_vals, param_names, X, verbose=True):
     theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star = list(param_dict.values())
     print(param_dict)
 
+<<<<<<< HEAD
+    assert isinstance(model_params, dict)
+    # Multiply each s count by the probability of that s, and sum to generate composite LL
+    log_likelihoods = list(itertools.chain(*[[_sval_likelihood(s_val = s, s_count=X[state-1][s], params = model_params, state=state) for s in X[state-1].keys()] 
+=======
     # Multiply each s by likelihood of that s, and sum to generate composite LL (flatten list with itertools)
     log_likelihoods = list(itertools.chain(*[[_sval_likelihood(s_count=X[state-1][s], s=s, state=state,
                                                                 theta0=theta0, theta1=theta1, theta2=theta2,
@@ -233,6 +250,7 @@ def _composite_neg_ll(param_vals, param_names, X, verbose=True):
                                                                     t1=t1, v=v, m1_star=m1_star, m2_star=m2_star,
                                                                       m1_prime_star=m1_prime_star, m2_prime_star=m2_prime_star)
                                               for s in X[state-1].keys()] 
+>>>>>>> 26db1e7 (new ll fxn implementation)
                                          for state in [1,2,3]]))
     
     assert all(i < 0 for i in log_likelihoods), f"Positive log-likelihood detected - (positive) log-likelihoods must be negative: {log_likelihoods}"
@@ -278,6 +296,16 @@ def _optimise_negll(X, initial_vals, lower_bounds, optimisation_algo, verbose):
 
 #     i = init_state-1
 
+<<<<<<< HEAD
+    if t <= tau1:
+        return float(-np.sum([alpha[k] * ginv[i,k] * g[k,3] * exp(-alpha[k]*t) for k in range(0,4)]))
+    elif tau1 < t <= tau0:
+        return float(-np.sum([[p1[i,j] * beta[k] * cinv[j,k] * c[k,3] * exp(-beta[k]*(t-tau1)) for k in range(0,4)] for j in range(0,3)]))
+    elif t > tau0:
+        return float(np.sum([[p1[i,j] * p2[j,l] * (1/a)*exp((-1/a)*(t-tau0)) for l in range(0,3)] for j in range(0,3)]))
+    else:
+        return 0
+=======
 #     q1 = matrices.GeneratorMatrix(m1_prime=m1_prime, m2_prime=m2_prime, c1=c1, c2=c2, matrix_type="Q1")
 #     q2 = matrices.GeneratorMatrix(m1=m1, m2=m2, b=b, matrix_type="Q2")
 #     q3 = matrices.GeneratorMatrix(a=a, matrix_type="Q3")
@@ -296,3 +324,4 @@ def _optimise_negll(X, initial_vals, lower_bounds, optimisation_algo, verbose):
 #         return float(np.sum([[p1[i,j] * p2[j,l] * (1/a)*exp((-1/a)*(t-tau0)) for l in range(0,3)] for j in range(0,3)]))
 #     else:
 #         return 0
+>>>>>>> 26db1e7 (new ll fxn implementation)

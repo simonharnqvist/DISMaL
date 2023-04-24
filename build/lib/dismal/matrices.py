@@ -79,15 +79,10 @@ class GeneratorMatrix():
         #     eigenvals = np.array([-1/self.pop_size1, -1/self.pop_size2, 0, 0])
         #     eigenvects = np.array([[1, 0, 0, -1], [0, 1, 0, -1], [0, 0, 1, -1], [0, 0, 0, 1]])
         #else:
-        eigenvals, eigenvects = self._calculate_left_eigenvectors(self.matrix)
-
+        eigenvals, eigenvects = linalg.eig(self.matrix, left=True, right=False)
+        eigenvals = np.sort(eigenvals)
+        eigenvects = np.transpose(eigenvects)
         return np.real(eigenvects), np.real(eigenvals)
-    
-    @staticmethod
-    def _calculate_left_eigenvectors(matrix):
-        mat_transpose = np.transpose(matrix)
-        eigenvals, eigenvects = linalg.eig(mat_transpose, left=False, right=True)
-        return eigenvals, np.transpose(eigenvects)
 
 
     @staticmethod

@@ -177,6 +177,21 @@ def counts_to_dict(x):
     """
     s, s_count = np.unique(x, return_counts=True)
     return dict(zip(s,s_count))
+
+def s_matrix(s_lists):
+    """s_lists = lists of s counts [[]]"""
+
+    max_len = np.max([np.max(l) for l in s_lists])
+    s_matrix = np.zeros(shape=(3, max_len+1))
+
+    for i in [0, 1, 2]: # for each state
+        idx, count = np.unique(s_lists[i], return_counts=True)
+        for j in range(0, len(idx)):
+            s_matrix[i][idx[j]] = count[j]
+
+    return np.array(s_matrix)
+
+
     
 def s_count(blockdict, samples_to_pop_map):
 
