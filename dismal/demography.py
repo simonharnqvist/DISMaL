@@ -10,6 +10,7 @@ class InferredDemography:
 
     def __init__(self, theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v,
                   m1_star, m2_star, m1_prime_star, m2_prime_star, negll, n_params):
+        """Class to represent a demographic model inferred with DemographicModel"""
         self.negll = negll
         self.n_params = n_params
         self.aic = metrics.aic(-negll, n_params)
@@ -24,12 +25,26 @@ class InferredDemography:
         return str(self.inferred_values)
 
 
-class Demography:
+class DemographicModel:
 
 
     def __init__(self, S, model=None,
                  set_m1_star_zero = False, set_m2_star_zero = False,
                    set_m1_prime_star_zero = False, set_m2_prime_star_zero = False, no_migration=False):
+        """Create a demographic model.
+
+        Args:
+            S (np.array): Matrix n(blocks)x3 of counts of nucleotide differences; each element S[i,j] is the number of times that i nucleotide differences occur between two blocks sampled in state j.
+            model (str, optional): Prespecified model to fit, one of "GIM" (generalised immigration with migration), "IIM" (isolation with initial migration), "SC" (secondary contact), "ISO" (isolation). Defaults to None.
+            set_m1_star_zero (bool, optional): Constrain m1_star to zero. Defaults to False.
+            set_m2_star_zero (bool, optional): Constrain m2_star to zero. Defaults to False.
+            set_m1_prime_star_zero (bool, optional): Constrain m1_prime_star to zero. Defaults to False.
+            set_m2_prime_star_zero (bool, optional): Constrain m2_prime_star to zero. Defaults to False.
+            no_migration (bool, optional): Constrain all migration rates to zero. Defaults to False.
+
+        Raises:
+            ValueError: if a prespecified model that isn't implemented is chosen.
+        """
 
         
         if model.lower() in ["iso", "isolation"]:
@@ -62,16 +77,42 @@ class Demography:
 
         self.S = S
 
-    #     self.res = self.infer_parameters()
-    #
-    # def __repr__(self):
-    #     return self.res
-
 
     def infer_parameters(self, optimisation_algo='L-BFGS-B', theta0_iv=5, theta1_iv=5, theta2_iv=5, theta1_prime_iv=5, theta2_prime_iv=5,
                          t1_iv=5, v_iv=5, m1_star_iv=0.3, m2_star_iv=0.3, m1_prime_star_iv=0.3, m2_prime_star_iv=0.3,
                          theta0_lb=0.01, theta1_lb=0.01, theta2_lb=0.01, theta1_prime_lb=0.01, theta2_prime_lb=0.01,
                          t1_lb=0, v_lb=0, m1_star_lb=0, m2_star_lb=0, m1_prime_star_lb=0, m2_prime_star_lb=0, verbose=True):
+        """Infer parameters of model.
+
+        Args:
+            optimisation_algo (str, optional): Which scipy.minimize optimisation algoritm to use. Defaults to 'L-BFGS-B'.
+            theta0_iv (int, optional): Initial value for theta0. Defaults to 5.
+            theta1_iv (int, optional): Initial value for theta1. Defaults to 5.
+            theta2_iv (int, optional): Initial value for theta2. Defaults to 5.
+            theta1_prime_iv (int, optional): Initial value for theta1_prime. Defaults to 5.
+            theta2_prime_iv (int, optional): Initial value for theta2_prime. Defaults to 5.
+            t1_iv (int, optional): Initial value for t1. Defaults to 5.
+            v_iv (int, optional): Initial value for v. Defaults to 5.
+            m1_star_iv (float, optional): Initial value for m1_star. Defaults to 0.3.
+            m2_star_iv (float, optional): Initial value for m2_star. Defaults to 0.3.
+            m1_prime_star_iv (float, optional): Initial value for m1_prime_star. Defaults to 0.3.
+            m2_prime_star_iv (float, optional): Initial value for m2_prime_star. Defaults to 0.3.
+            theta0_lb (float, optional): Lower bound for theta0. Defaults to 0.01.
+            theta1_lb (float, optional): Lower bound for theta1. Defaults to 0.01.
+            theta2_lb (float, optional): Lower bound for theta2. Defaults to 0.01.
+            theta1_prime_lb (float, optional): Lower bound for theta1_prime. Defaults to 0.01.
+            theta2_prime_lb (float, optional): Lower bound for theta2_prime. Defaults to 0.01.
+            t1_lb (int, optional): Lower bound for t1. Defaults to 0.
+            v_lb (int, optional): Lower bound for v. Defaults to 0.
+            m1_star_lb (int, optional): Lower bound for m1_star. Defaults to 0.
+            m2_star_lb (int, optional): Lower bound for m2_star. Defaults to 0.
+            m1_prime_star_lb (int, optional): Lower bound for m1_prime_star. Defaults to 0.
+            m2_prime_star_lb (int, optional): Lower bound for m2_prime_star. Defaults to 0.
+            verbose (bool, optional): Whether to output parameters and -logL during model fitting. Defaults to True.
+
+        Returns:
+            _type_: _description_
+        """
         
 
         initial_values = {"theta0":theta0_iv, "theta1":theta1_iv, "theta2":theta2_iv, "theta1_prime":theta1_prime_iv, "theta2_prime":theta2_prime_iv,
@@ -95,7 +136,7 @@ class Demography:
         n_params = 11 - len([i for i in [self.set_m1_star_zero, self.set_m2_star_zero, self.set_m1_prime_star_zero, self.set_m2_prime_star_zero] if i])
 
         
-        inferred_params, negll = likelihood.optimise_neg_ll(self.S, list(initial_values.values()), list(lower_bounds.values()), list(upper_bounds.values()), optimisation_algo, verbose=verbose)
+        inferred_params, negll = likelihood.optimise_neg_ll(S=self.S, initial_vals=list(initial_values.values()), lower_bounds=list(lower_bounds.values()), upper_bounds=list(upper_bounds.values()), optimisation_algo=optimisation_algo, verbose=verbose)
 
         return InferredDemography(theta0=inferred_params[0], theta1=inferred_params[1], theta2=inferred_params[2],
                                     theta1_prime=inferred_params[3], theta2_prime=inferred_params[4],
