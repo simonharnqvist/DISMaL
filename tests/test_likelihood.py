@@ -1,4 +1,4 @@
-from dismal.stochastic_matrices import GeneratorMatrix
+from dismal.generator_matrices import GeneratorMatrix
 from dismal.likelihood import p_matrix
 from numpy import linalg
 import numpy as np

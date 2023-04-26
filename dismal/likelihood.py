@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 from scipy import linalg
 from scipy.stats import poisson
-from stochastic_matrices import GeneratorMatrix
+from generator_matrices import GeneratorMatrix
 
 np.set_printoptions(suppress=True)
 
@@ -19,6 +19,10 @@ def p_matrix(matrix, inv_matrix, eigenvalues, t):
         _type_: _description_
     """
     return inv_matrix @ np.diag(np.exp(eigenvalues * t)) @ matrix
+
+def prob_s_events_matrix(alpha, beta, gamma, s_vals, t1, t0, rel_mu=1):
+    """Calculate probability of seeing s events during a given time span; returns matrix s x i, where each eigenvalue corresponds to a state (?)"""
+    pass
 
 def alpha_matrix(alpha, s_vals, t1, rel_mu=1):
     """Generate matrix of s values (columns) x adjusted alpha values (rows)"""
