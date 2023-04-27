@@ -1,7 +1,6 @@
 import numpy as np
 import scipy.optimize
 #import generate_demes
-import utils
 import likelihood
 import metrics
 import preprocess

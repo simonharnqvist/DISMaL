@@ -37,17 +37,19 @@ def beta_matrix(beta, s_vals, t1, t0, rel_mu=1):
     beta, s_vals = np.array(beta), np.array(s_vals)
     betas = []
     for s in s_vals:
-        betas.append((beta/(beta+rel_mu)) * ((rel_mu/(beta+rel_mu))**s) * np.exp(beta*t1) * (poisson.cdf(s, (t1*(beta+rel_mu))) - poisson.cdf(s, (t0*(beta+rel_mu)))))
+        betas.append((beta/(beta+rel_mu)) * ((rel_mu/(beta+rel_mu))**s) *
+                      np.exp(beta*t1) * (poisson.cdf(s, (t1*(beta+rel_mu))) - poisson.cdf(s, (t0*(beta+rel_mu)))))
     return np.transpose(np.array(betas))
 
-def gamma_matrix(gamma, s_vals,  t0, rel_mu=1):
+def gamma_matrix(gamma, s_vals, t0, rel_mu=1):
     gamma, s_vals = np.array(gamma), np.array(s_vals)
     gammas = []
     for s in s_vals:
-        gammas.append((gamma/(gamma+rel_mu)) * ((rel_mu/(gamma+rel_mu))**s) * np.exp(gamma*t0) * poisson.cdf(s, (t0*(gamma+rel_mu))))
+        gammas.append((gamma/(gamma+rel_mu)) * ((rel_mu/(gamma+rel_mu))**s) *
+                       np.exp(gamma*t0) * poisson.cdf(s, (t0*(gamma+rel_mu))))
     return np.transpose(np.array(gammas))
 
-def likelihood_matrix(q1, q2, q3, t1, v, S):
+def likelihood_matrix(q1, q2, q3, t1, v, S=None, s_vals=None):
     """S is a matrix of counts; return matrix of likelihood of params given s (columns) and state (rows)"""
     g, eigvals_q1 = q1.eigen()
     c, eigvals_q2 = q2.eigen()
@@ -55,18 +57,22 @@ def likelihood_matrix(q1, q2, q3, t1, v, S):
     cinv = linalg.inv(c)
     alpha = -eigvals_q1[0:3]
     beta = -eigvals_q2[0:3]
-    gamma = 1/q3[0:3] # 1/(1/a)
+    gamma = -q3[0,0]
 
     gg = -ginv @ np.diag(g[:,3])
     cc = -cinv @ np.diag(c[:,3])
-    pij1 = p_matrix(g, ginv, eigvals_q1, t1)
-    pij2 = p_matrix(c, cinv, eigvals_q2, v)
+    pij1 = p_matrix(matrix=g, inv_matrix=ginv, eigenvalues=eigvals_q1, t=t1)
+    pij2 = p_matrix(matrix=c, inv_matrix=cinv, eigenvalues=eigvals_q2, t=v)
 
-    s_vals = [s for s in range(0, S.shape[1])]
+    if s_vals is None:
+        assert S is not None
+        s_vals = [s for s in range(0, S.shape[1])]
 
-    ll_matrix = [-np.log(gg[i, 0:3] @ alpha_matrix(alpha, s_vals, t1)
-                         + pij1[i, 0:3] @ cc[0:3, 0:3] @ beta_matrix(beta, s_vals, t1=t1, t0=(v+t1)) +
-                         (1 - (pij1@pij2)[i,3]) * gamma_matrix(gamma, s_vals, t1+v)) for i in [0, 1, 2]]
+    t0 = t1+v
+
+    ll_matrix = [-np.log(gg[i, 0:3] @ alpha_matrix(alpha=alpha, s_vals=s_vals, t1=t1)
+                         + pij1[i, 0:3] @ cc[0:3, 0:3] @ beta_matrix(beta=beta, s_vals=s_vals, t1=t1, t0=t0) +
+                         (1 - (pij1@pij2)[i,3]) * gamma_matrix(gamma=gamma, s_vals=s_vals, t0=t0)) for i in [0, 1, 2]]
     
     return ll_matrix
 

@@ -16,10 +16,10 @@ def msprime_simulate(theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v,
     demography.add_population(name="c1", initial_size=_calculate_Ne(theta1_prime, mutation_rate))
     demography.add_population(name="c2", initial_size=_calculate_Ne(theta2_prime, mutation_rate))
 
-    tau1 = t1/theta1
-    tau0 = v/theta1 + tau1
     N = _calculate_Ne(theta1, mutation_rate)
-    print(N)
+    
+    tau0 = t1/theta1
+    tau1 = (t1+v)/theta1
 
     demography.add_population_split(time=_coalescent_time_to_generations((tau0), N), derived=["b1", "b"], ancestral="a")
     demography.add_population_split(time=_coalescent_time_to_generations(tau1, N), derived=["c1"], ancestral="b1")
@@ -39,9 +39,10 @@ def msprime_simulate(theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v,
     s_dicts = []
     for ts_state in [ts_state1, ts_state2, ts_state3]:
         s = []
-        for ts in ts_state:
+        for idx, ts in enumerate(ts_state):
             mts = msprime.sim_mutations(ts, rate=mutation_rate, discrete_genome=False)
-            s.append(mts.get_num_mutations())
+            mts.divergence(sample_sets=[[0], [2]], span_normalise=False)
+            
         s_dicts.append(preprocess.counts_to_dict(s))
 
     return s_dicts

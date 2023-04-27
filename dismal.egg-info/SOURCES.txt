@@ -2,14 +2,14 @@ README.md
 setup.py
 dismal/__init__.py
 dismal/demography.py
+dismal/generator_matrices.py
 dismal/likelihood.py
 dismal/metrics.py
 dismal/preprocess.py
 dismal/simulate.py
-dismal/stochastic_matrices.py
 dismal.egg-info/PKG-INFO
 dismal.egg-info/SOURCES.txt
 dismal.egg-info/dependency_links.txt
 dismal.egg-info/top_level.txt
+tests/test_generator_matrices.py
 tests/test_likelihood.py
-tests/test_stochastic_matrices.py

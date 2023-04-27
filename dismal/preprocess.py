@@ -1,6 +1,5 @@
 from collections import Counter
 import numpy as np
-import utils
 import itertools
 import allel
 from collections import defaultdict
@@ -188,6 +187,16 @@ def s_matrix(s_lists):
         idx, count = np.unique(s_lists[i], return_counts=True)
         for j in range(0, len(idx)):
             s_matrix[i][idx[j]] = count[j]
+
+    return np.array(s_matrix)
+
+def s_matrix_from_dicts(dicts):
+    s_max = int(np.max([np.max(list(dicts[i].keys())) for i in [0,1,2]]))
+    s_matrix = []
+
+    for i in [0,1,2]:
+        s_vals = [dicts[i][j] for j in range(0, s_max)]
+        s_matrix.append(s_vals)
 
     return np.array(s_matrix)
 
