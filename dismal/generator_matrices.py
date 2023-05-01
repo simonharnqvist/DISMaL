@@ -2,6 +2,7 @@ import numpy as np
 from scipy import linalg
 import math
 
+# TODO: rename to TransitionRateMatrix, introduce class StochasticMatrix
 class GeneratorMatrix:
 
     def __init__(self, matrix_type, theta0=None, theta1=None, theta2=None, theta1_prime=None, theta2_prime=None,
@@ -48,6 +49,9 @@ class GeneratorMatrix:
             assert theta0 is not None and theta0 > 0, f"invalid value {theta0} for theta0"
             a = theta0/theta1
             self.matrix = self.generate_q3(a)
+
+        self.inv = linalg.inv(self.matrix)
+        self.eigenvectors, self.eigenvalues = self.eigen()
 
     def __repr__(self):
         return str(self.matrix)

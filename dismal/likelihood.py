@@ -6,8 +6,8 @@ from generator_matrices import GeneratorMatrix
 
 np.set_printoptions(suppress=True)
 
-def p_matrix(matrix, inv_matrix, eigenvalues, t):
-    """_summary_
+def stochastic_matrix(eigenvect_mat, inv_eigenvect_mat, eigenvals, t):
+    """ Fast matrix exponentiation to produce stochastic matrix from eigenvalues and eigenvectors of transition rate matrix. Equivalent to linalg.expm(Q), but faster if eigenvalues+vectors are already available.
 
     Args:
         matrix (_type_): _description_
@@ -18,14 +18,14 @@ def p_matrix(matrix, inv_matrix, eigenvalues, t):
     Returns:
         _type_: _description_
     """
-    return inv_matrix @ np.diag(np.exp(eigenvalues * t)) @ matrix
+    return inv_eigenvect_mat @ np.diag(np.exp(eigenvals * t)) @ eigenvect_mat
 
 def prob_s_events_matrix(alpha, beta, gamma, s_vals, t1, t0, rel_mu=1):
     """Calculate probability of seeing s events during a given time span; returns matrix s x i, where each eigenvalue corresponds to a state (?)"""
     pass
 
 def alpha_matrix(alpha, s_vals, t1, rel_mu=1):
-    """Generate matrix of s values (columns) x adjusted alpha values (rows)"""
+    """Generate matrix of s values (columns) x adjusted alpha values (rows). This corresponds to P(s events before coalescence) * 1-P(s events)"""
     alpha, s_vals = np.array(alpha), np.array(s_vals)
     alphas = []
     for s in s_vals:
@@ -51,18 +51,16 @@ def gamma_matrix(gamma, s_vals, t0, rel_mu=1):
 
 def likelihood_matrix(q1, q2, q3, t1, v, S=None, s_vals=None):
     """S is a matrix of counts; return matrix of likelihood of params given s (columns) and state (rows)"""
-    g, eigvals_q1 = q1.eigen()
-    c, eigvals_q2 = q2.eigen()
-    ginv = linalg.inv(g)
-    cinv = linalg.inv(c)
-    alpha = -eigvals_q1[0:3]
-    beta = -eigvals_q2[0:3]
+    g = q1.eigenvectors
+    c = q2.eigenvectors
+    alpha = -q1.eigenvalues[0:3]
+    beta = -q2.eigenvalues[0:3]
     gamma = -q3[0,0]
 
-    gg = -ginv @ np.diag(g[:,3])
-    cc = -cinv @ np.diag(c[:,3])
-    pij1 = p_matrix(matrix=g, inv_matrix=ginv, eigenvalues=eigvals_q1, t=t1)
-    pij2 = p_matrix(matrix=c, inv_matrix=cinv, eigenvalues=eigvals_q2, t=v)
+    gg = -g.inv @ np.diag(g[:,3])
+    cc = -c.inv @ np.diag(c[:,3])
+    pij1 = stochastic_matrix(matrix=g, inv_matrix=g.inv, eigenvalues=q1.eigenvalues, t=t1)
+    pij2 = stochastic_matrix(matrix=c, inv_matrix=c.inv, eigenvalues=q2.eigenvalues, t=v)
 
     if s_vals is None:
         assert S is not None

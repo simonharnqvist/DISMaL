@@ -1,6 +1,8 @@
 from dismal.generator_matrices import GeneratorMatrix
 import numpy as np
 import itertools
+from scipy import linalg
+import mpmath
 
 popsizes = [0.01, 0.1, 1, 10, 100]
 mig_rates = [0, 0.0001, 0.01, 1, 10]
@@ -54,3 +56,15 @@ def test_q2_correct_vals():
                            [0, 0, 0, 0]])
      
      assert np.isclose(q2.matrix, correct_q2).all()
+
+def test_p_matrix_equivalent_to_expm():
+     matrix = GeneratorMatrix(matrix_type="Q2", theta1=1, theta2=1, m1_star=2, m2_star=2)
+     eigenvects, eigenvals = matrix.eigen()
+     t = 1
+     inv_eigenvects = linalg.inv(eigenvects)
+     eigen_expm = inv_eigenvects @ np.diag(np.exp(eigenvals * t)) @ eigenvects
+
+     matr = linalg.expm(matrix.matrix)
+     linalg_expm = np.array(matr.tolist(), dtype=float)
+
+     assert np.isclose(linalg_expm, eigen_expm).all()
