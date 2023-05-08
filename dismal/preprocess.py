@@ -195,7 +195,7 @@ def s_matrix_from_dicts(dicts):
     s_matrix = []
 
     for i in [0,1,2]:
-        s_vals = [dicts[i][j] for j in range(0, s_max)]
+        s_vals = [dicts[i].get(j,0) for j in range(0, s_max)] # return 0 if key not found
         s_matrix.append(s_vals)
 
     return np.array(s_matrix)

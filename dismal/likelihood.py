@@ -53,14 +53,16 @@ def likelihood_matrix(q1, q2, q3, t1, v, S=None, s_vals=None):
     """S is a matrix of counts; return matrix of likelihood of params given s (columns) and state (rows)"""
     g = q1.eigenvectors
     c = q2.eigenvectors
+    ginv = q1.eigenvectors_inv
+    cinv = q2.eigenvectors_inv
     alpha = -q1.eigenvalues[0:3]
     beta = -q2.eigenvalues[0:3]
     gamma = -q3[0,0]
 
-    gg = -g.inv @ np.diag(g[:,3])
-    cc = -c.inv @ np.diag(c[:,3])
-    pij1 = stochastic_matrix(matrix=g, inv_matrix=g.inv, eigenvalues=q1.eigenvalues, t=t1)
-    pij2 = stochastic_matrix(matrix=c, inv_matrix=c.inv, eigenvalues=q2.eigenvalues, t=v)
+    gg = -ginv @ np.diag(g[:,3])
+    cc = -cinv @ np.diag(c[:,3])
+    pij1 = stochastic_matrix(eigenvect_mat=g, inv_eigenvect_mat=ginv, eigenvals=q1.eigenvalues, t=t1)
+    pij2 = stochastic_matrix(eigenvect_mat=c, inv_eigenvect_mat=cinv, eigenvals=q2.eigenvalues, t=v)
 
     if s_vals is None:
         assert S is not None
@@ -109,8 +111,3 @@ def optimise_neg_ll(S, initial_vals, lower_bounds, upper_bounds, optimisation_al
     assert optimised.success, f"Optimisation failed: {optimised.message}"
 
     return inferred_params, negll
-
-
-
-
-

@@ -50,8 +50,8 @@ class GeneratorMatrix:
             a = theta0/theta1
             self.matrix = self.generate_q3(a)
 
-        self.inv = linalg.inv(self.matrix)
         self.eigenvectors, self.eigenvalues = self.eigen()
+        self.eigenvectors_inv = linalg.inv(self.eigenvectors)
 
     def __repr__(self):
         return str(self.matrix)
