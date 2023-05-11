@@ -6,9 +6,9 @@ from dismal.preprocess import s_matrix_from_dicts
 def simulate_msprime(theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star, Ne, block_len, num_replicates):
 
     # Time parameter conversions
-    t0_coal_time = (t1+v)/theta1
+    t0_coal_time = (t1+v)
     t0_gen_time = 2*Ne*t0_coal_time
-    t1_coal_time = t1/theta1
+    t1_coal_time = t1
     t1_gen_time = 2*Ne*t1_coal_time
 
     # Convert theta values from per block to per base

@@ -1,33 +1,38 @@
 import msprime
-from dismal import preprocess
+import numpy as np
+from collections import Counter
+from dismal.preprocess import s_matrix_from_dicts
 
-def _coalescent_time_to_generations(t, N):
-    return t*2*N
+def simulate_msprime(theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star, Ne, block_len, num_replicates):
 
-def _calculate_Ne(theta, mu):
-    return theta/(4*mu)
+    # Time parameter conversions
+    t0_coal_time = (t1+v)
+    t0_gen_time = 2*Ne*t0_coal_time
+    t1_coal_time = t1
+    t1_gen_time = 2*Ne*t1_coal_time
 
-def msprime_simulate(theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v,
-                  m1_star, m2_star, m1_prime_star, m2_prime_star, mutation_rate, num_replicates, block_len):
+    # Convert theta values from per block to per base
+    ms_theta0, ms_theta1, ms_theta2, ms_theta1_prime, ms_theta2_prime = [theta/block_len for theta in [theta0, theta1, theta2, theta1_prime, theta2_prime]]
+
+    # Mutation rate
+    mu_per_bp = (ms_theta1/(4*Ne))
+
+    # Convert thetas to Ne
+    Ne_a, Ne_b, Ne_c1, Ne_c2 = [theta/(4*mu_per_bp) for theta in [ms_theta0, ms_theta2, ms_theta1_prime, ms_theta2_prime]]
+
     demography = msprime.Demography()
-    demography.add_population(name="a", initial_size=_calculate_Ne(theta0, mutation_rate))
-    demography.add_population(name="b1", initial_size=_calculate_Ne(theta1, mutation_rate))
-    demography.add_population(name="b", initial_size=_calculate_Ne(theta2, mutation_rate))
-    demography.add_population(name="c1", initial_size=_calculate_Ne(theta1_prime, mutation_rate))
-    demography.add_population(name="c2", initial_size=_calculate_Ne(theta2_prime, mutation_rate))
-
-    tau1 = t1/theta1
-    tau0 = v/theta1 + tau1
-    N = _calculate_Ne(theta1, mutation_rate)
-    print(N)
-
-    demography.add_population_split(time=_coalescent_time_to_generations((tau0), N), derived=["b1", "b"], ancestral="a")
-    demography.add_population_split(time=_coalescent_time_to_generations(tau1, N), derived=["c1"], ancestral="b1")
-    demography.add_population_split(time=_coalescent_time_to_generations(tau1, N), derived=["c2"], ancestral="b")
-    demography.set_migration_rate("b1", "b", m1_star)
-    demography.set_migration_rate("b", "b1", m2_star)
-    demography.set_migration_rate("c1", "c2", m1_prime_star)
-    demography.set_migration_rate("c2", "c1", m2_prime_star)
+    demography.add_population(name="a", initial_size=Ne_a)
+    demography.add_population(name="b1", initial_size=Ne)
+    demography.add_population(name="b2", initial_size=Ne_b)
+    demography.add_population(name="c1", initial_size=Ne_c1)
+    demography.add_population(name="c2", initial_size=Ne_c2)
+    demography.add_population_split(time=t0_gen_time, derived=["b1", "b2"], ancestral="a")
+    demography.add_population_split(time=t1_gen_time, derived=["c1"], ancestral="b1")
+    demography.add_population_split(time=t1_gen_time, derived=["c2"], ancestral="b2")
+    demography.set_migration_rate("b2", "b1", m2_star/2) # NB: backwards in time in msprime
+    demography.set_migration_rate("b1", "b2", m1_star/2)
+    demography.set_migration_rate("c2", "c1", m2_prime_star/2)
+    demography.set_migration_rate("c1", "c2", m1_prime_star/2)
     demography.sort_events()
 
     ts_state1 = msprime.sim_ancestry(samples={'c1':2, 'c2':0}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=2)
@@ -35,88 +40,14 @@ def msprime_simulate(theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v,
     ts_state3 = msprime.sim_ancestry(samples={'c1':1, 'c2':1}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=2)
 
     s = []
+    for ts in [ts_state1, ts_state2, ts_state3]:
+        sim = np.zeros(num_replicates)
+        for replicate_index, ts in enumerate(ts):
+            ts_muts = msprime.sim_mutations(ts, rate=mu_per_bp, discrete_genome=False)
+            sim[replicate_index] = ts_muts.divergence(sample_sets=[[0],[2]], span_normalise=False)
 
-    s_dicts = []
-    for ts_state in [ts_state1, ts_state2, ts_state3]:
-        s = []
-        for ts in ts_state:
-            mts = msprime.sim_mutations(ts, rate=mutation_rate, discrete_genome=False)
-            s.append(mts.get_num_mutations())
-        s_dicts.append(preprocess.counts_to_dict(s))
-
-    return s_dicts
-
-def msprime_simulate_old_params(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, num_replicates, block_len):
-    demography = msprime.Demography()
-    demography.add_population(name="a", initial_size=a*N)
-    demography.add_population(name="b1", initial_size=N)
-    demography.add_population(name="b", initial_size=b*N)
-    demography.add_population(name="c1", initial_size=c1*N)
-    demography.add_population(name="c2", initial_size=c2*N)
-    demography.add_population_split(time=_coalescent_time_to_generations(tau0, N), derived=["b1", "b"], ancestral="a")
-    demography.add_population_split(time=_coalescent_time_to_generations(tau1, N), derived=["c1"], ancestral="b1")
-    demography.add_population_split(time=_coalescent_time_to_generations(tau1, N), derived=["c2"], ancestral="b")
-    demography.set_migration_rate("b1", "b", m1)
-    demography.set_migration_rate("b", "b1", m2)
-    demography.set_migration_rate("c1", "c2", m1_prime)
-    demography.set_migration_rate("c2", "c1", m2_prime)
-    demography.sort_events()
-
-    ts_state1 = msprime.sim_ancestry(samples={'c1':2, 'c2':0}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=1)
-    ts_state2 = msprime.sim_ancestry(samples={'c1':0, 'c2':2}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=1)
-    ts_state3 = msprime.sim_ancestry(samples={'c1':1, 'c2':1}, demography=demography, sequence_length=block_len, num_replicates=num_replicates, ploidy=1)
-
-    mutation_rate = theta/(4*N)
-    s = []
-
-    s_dicts = []
-    for ts_state in [ts_state1, ts_state2, ts_state3]:
-        s = []
-        for ts in ts_state:
-            mts = msprime.sim_mutations(ts, rate=mutation_rate, discrete_genome=False)
-            s.append(mts.get_num_mutations())
-        s_dicts.append(preprocess.counts_to_dict(s))
-
-    return s_dicts
+        s_counts_dict = Counter(sim)
+        s.append(dict(sorted(s_counts_dict.items())))
 
 
-
-
-
-
- 
-# def _simulate_block(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, n_samples, block_len):
-#     demography = msprime.Demography()
-#     demography.add_population(name="a", initial_size=a*N)
-#     demography.add_population(name="b1", initial_size=N)
-#     demography.add_population(name="b", initial_size=b*N)
-#     demography.add_population(name="c1", initial_size=c1*N)
-#     demography.add_population(name="c2", initial_size=c2*N)
-#     demography.add_population_split(time=_coalescent_time_to_generations(tau0, N), derived=["b1", "b"], ancestral="a")
-#     demography.add_population_split(time=_coalescent_time_to_generations(tau1, N), derived=["c1"], ancestral="b1")
-#     demography.add_population_split(time=_coalescent_time_to_generations(tau1, N), derived=["c2"], ancestral="b")
-#     demography.set_migration_rate("b1", "b", m1)
-#     demography.set_migration_rate("b", "b1", m2)
-#     demography.set_migration_rate("c1", "c2", m1_prime)
-#     demography.set_migration_rate("c2", "c1", m2_prime)
-#     demography.sort_events()
-#     ts = msprime.sim_ancestry(samples={'c1':n_samples[0], 'c2':n_samples[1]}, demography=demography, sequence_length=block_len)
-#     mutation_rate = _theta_to_mu(theta, N)
-#     mts = msprime.sim_mutations(ts, rate=mutation_rate, discrete_genome=False)
-
-#     return mts
-
-# def simulate_blocks_vcf(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, n_samples, block_len, n_blocks, output_prefix):
-
-#     for i in tqdm.tqdm(range(0, n_blocks)):
-#         treeseq = _simulate_block(a,b,c1,c2,tau1,tau0,m1,m2,m1_prime,m2_prime,theta,N, n_samples, block_len)
-#         vcf_path = f"{output_prefix}_{i}.vcf"
-
-#         with open(vcf_path, 'w') as f:
-#             treeseq.write_vcf(f)
-
-#     params_path = f"{output_prefix}.params.txt"
-#     with open(params_path, 'w') as f:
-#         f.write(f"a:{a}, b:{b}, c1:{c1}, c2:{c2}, tau1:{tau1}, tau0:{tau0}, theta:{theta}, m1:{m1}, m2:{m2}, m1_prime;{m1_prime}, m2_prime:{m2_prime}, seq_len:{block_len}, N:{N}")
-#         print(f"Parameters written to {params_path}")
-
+    return s_matrix_from_dicts(s)

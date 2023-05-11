@@ -75,9 +75,28 @@ class DemographicModel:
             self.set_m2_prime_star_zero = set_m2_prime_star_zero
 
         self.S = S
+        self.theta1_prime_est, self.theta2_prime_est = self.estimate_thetas()
+        self.avg_theta_est = (self.theta1_prime_est + self.theta2_prime_est)/2
+
+    def estimate_thetas(self):
+        s1 = self.S[0]
+        s2 = self.S[1]
+
+        thetas = []
+        for s in [s1, s2]:
+            d = dict(zip([i for i in range(0, len(s))], s))
+
+            total = 0
+            count = 0
+            for k, v in d.items():
+                total += k * v
+                count += v
+            theta = total / count
+            thetas.append(theta)
+        return thetas[0], thetas[1]
 
 
-    def infer_parameters(self, optimisation_algo='L-BFGS-B', theta0_iv=5, theta1_iv=5, theta2_iv=5, theta1_prime_iv=5, theta2_prime_iv=5,
+    def infer_parameters(self, optimisation_algo='L-BFGS-B', theta0_iv=None, theta1_iv=None, theta2_iv=None, theta1_prime_iv=None, theta2_prime_iv=None,
                          t1_iv=5, v_iv=5, m1_star_iv=0.3, m2_star_iv=0.3, m1_prime_star_iv=0.3, m2_prime_star_iv=0.3,
                          theta0_lb=0.01, theta1_lb=0.01, theta2_lb=0.01, theta1_prime_lb=0.01, theta2_prime_lb=0.01,
                          t1_lb=0, v_lb=0, m1_star_lb=0, m2_star_lb=0, m1_prime_star_lb=0, m2_prime_star_lb=0, verbose=True):
@@ -112,7 +131,20 @@ class DemographicModel:
         Returns:
             _type_: _description_
         """
-        
+
+        # Set initial vals from data estimates
+        # TODO: is there a good way of calculating dxy for tau?
+        if theta1_prime_iv is None:
+            theta1_prime_iv = self.theta1_prime_est
+        if theta2_prime_iv is None:
+            theta2_prime_iv = self.theta2_prime_est
+        if theta0_iv is None:
+            theta0_iv = self.avg_theta_est
+        if theta1_iv is None:
+            theta1_iv = theta1_prime_iv
+        if theta2_iv is None:
+            theta2_iv = theta2_prime_iv
+
 
         initial_values = {"theta0":theta0_iv, "theta1":theta1_iv, "theta2":theta2_iv, "theta1_prime":theta1_prime_iv, "theta2_prime":theta2_prime_iv,
                                  "t1":t1_iv, "v":v_iv, "m1_star":m1_star_iv, "m2_star":m2_star_iv, "m1_prime_star":m1_prime_star_iv, "m2_prime_star":m2_prime_star_iv}

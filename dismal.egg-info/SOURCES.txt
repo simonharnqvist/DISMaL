@@ -4,9 +4,12 @@ dismal/__init__.py
 dismal/demography.py
 dismal/generator_matrices.py
 dismal/likelihood.py
+dismal/likelihood_matrix.py
 dismal/metrics.py
 dismal/preprocess.py
+dismal/setup_cython.py
 dismal/simulate.py
+dismal/stochastic_matrix.py
 dismal.egg-info/PKG-INFO
 dismal.egg-info/SOURCES.txt
 dismal.egg-info/dependency_links.txt

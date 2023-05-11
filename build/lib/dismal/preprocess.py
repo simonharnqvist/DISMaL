@@ -1,6 +1,5 @@
 from collections import Counter
 import numpy as np
-import utils
 import itertools
 import allel
 from collections import defaultdict
@@ -177,6 +176,31 @@ def counts_to_dict(x):
     """
     s, s_count = np.unique(x, return_counts=True)
     return dict(zip(s,s_count))
+
+def s_matrix(s_lists):
+    """s_lists = lists of s counts [[]]"""
+
+    max_len = np.max([np.max(l) for l in s_lists])
+    s_matrix = np.zeros(shape=(3, max_len+1))
+
+    for i in [0, 1, 2]: # for each state
+        idx, count = np.unique(s_lists[i], return_counts=True)
+        for j in range(0, len(idx)):
+            s_matrix[i][idx[j]] = count[j]
+
+    return np.array(s_matrix)
+
+def s_matrix_from_dicts(dicts):
+    s_max = int(np.max([np.max(list(dicts[i].keys())) for i in [0,1,2]]))
+    s_matrix = []
+
+    for i in [0,1,2]:
+        s_vals = [dicts[i].get(j,0) for j in range(0, s_max)] # return 0 if key not found
+        s_matrix.append(s_vals)
+
+    return np.array(s_matrix)
+
+
     
 def s_count(blockdict, samples_to_pop_map):
 

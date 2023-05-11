@@ -97,17 +97,23 @@ def composite_neg_ll(params, S, verbose=False):
 
 
 def optimise_neg_ll(S, initial_vals, lower_bounds, upper_bounds, optimisation_algo, verbose):
-    print(f"iv: {initial_vals}, lb: {lower_bounds}, ub: {upper_bounds}")
 
     bounds = tuple(zip(lower_bounds, upper_bounds))
 
-    optimised = scipy.optimize.minimize(composite_neg_ll, x0=np.array(initial_vals),
+    for optimisation_algo in ["L-BFGS-B", "Nelder-Mead", "Powell"]:
+        optimised = scipy.optimize.minimize(composite_neg_ll, x0=np.array(initial_vals),
                                                 method=optimisation_algo,
                                                 args=(S, verbose),
                                                 bounds=bounds)
-    inferred_params = optimised.x
-    negll = optimised.fun
+        if optimised.success:
+            break
+        else:
+            f"Optimiser {optimisation_algo} failed"
 
-    assert optimised.success, f"Optimisation failed: {optimised.message}"
+    if optimised.success:
+        inferred_params = optimised.x
+        negll = optimised.fun
+    else:
+        raise RuntimeError(f"Optimisers L-BFGS-B, Nelder-Mead, and Powell all failed to maximise the likelihood")
 
     return inferred_params, negll
