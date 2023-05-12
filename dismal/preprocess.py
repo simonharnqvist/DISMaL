@@ -8,6 +8,7 @@ import functools, operator, collections
 import pandas as pd
 import glob
 import tqdm
+import zarr
 
 # Workflow: 1) read VCF; 2) split into blocks; 3) select 1 hap per individual; 4) calculate s
 
@@ -31,15 +32,17 @@ class BlocksDictionary(defaultdict):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
-    def create(self, vcf_path, make_blocks=False, block_length=None, n_blocks=None):
+
+    def create(self, vcf_path, zarr_path, make_blocks=False, block_length=None, n_blocks=None):
         blocks_dictionary = NestedDefaultDict()
 
-        vcf_dict = dict(allel.read_vcf(vcf_path, fields=["samples", "calldata/GT", "variants/CHROM", "variants/POS"]))
-        chromosomes = vcf_dict["variants/CHROM"]
-        samples = vcf_dict["samples"]
-        gt = vcf_dict["calldata/GT"]
-        pos = vcf_dict["variants/POS"]
+        allel.vcf_to_zarr(vcf_path, zarr_path,
+                           fields=["samples", "calldata/GT", "variants/CHROM", "variants/POS"], overwrite=True)
+        callset = zarr.open_group(zarr_path, mode='r')
+        chromosomes = callset["variants/CHROM"][:]
+        samples = callset["samples"][:]
+        gt = callset["calldata/GT"][:]
+        pos = callset["variants/POS"][:]
 
         if make_blocks:
             assert block_length is not None

@@ -1,6 +1,7 @@
 README.md
 setup.py
 dismal/__init__.py
+dismal/blocking.py
 dismal/demography.py
 dismal/generator_matrices.py
 dismal/likelihood.py
