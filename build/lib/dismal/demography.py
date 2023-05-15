@@ -75,14 +75,14 @@ class DemographicModel:
             self.set_m2_prime_star_zero = set_m2_prime_star_zero
 
         self.S = S
-        self.theta1_prime_est, self.theta2_prime_est = self.estimate_thetas()
+        self.theta1_prime_est, self.theta2_prime_est = self.estimate_pi()
         self.avg_theta_est = (self.theta1_prime_est + self.theta2_prime_est)/2
 
-    def estimate_thetas(self):
+    def estimate_pi(self):
         s1 = self.S[0]
         s2 = self.S[1]
 
-        thetas = []
+        pis = []
         for s in [s1, s2]:
             d = dict(zip([i for i in range(0, len(s))], s))
 
@@ -91,9 +91,9 @@ class DemographicModel:
             for k, v in d.items():
                 total += k * v
                 count += v
-            theta = total / count
-            thetas.append(theta)
-        return thetas[0], thetas[1]
+            pi = total / count
+            pis.append(pi)
+        return pis[0], pis[1]
 
 
     def infer_parameters(self, optimisation_algo='L-BFGS-B', theta0_iv=None, theta1_iv=None, theta2_iv=None, theta1_prime_iv=None, theta2_prime_iv=None,
@@ -133,11 +133,13 @@ class DemographicModel:
         """
 
         # Set initial vals from data estimates
-        # TODO: is there a good way of calculating dxy for tau?
+        # TODO: is there a good way of calculating dxy for tau (this probably needs to be done from VCF, not counts)
         if theta1_prime_iv is None:
             theta1_prime_iv = self.theta1_prime_est
+            print(f"Estimated pi for population 1: {theta1_prime_iv}")
         if theta2_prime_iv is None:
             theta2_prime_iv = self.theta2_prime_est
+            print(f"Estimated pi for population 2: {theta2_prime_iv}")
         if theta0_iv is None:
             theta0_iv = self.avg_theta_est
         if theta1_iv is None:
@@ -167,7 +169,10 @@ class DemographicModel:
         n_params = 11 - len([i for i in [self.set_m1_star_zero, self.set_m2_star_zero, self.set_m1_prime_star_zero, self.set_m2_prime_star_zero] if i])
 
         
-        inferred_params, negll = likelihood.optimise_neg_ll(S=self.S, initial_vals=list(initial_values.values()), lower_bounds=list(lower_bounds.values()), upper_bounds=list(upper_bounds.values()), optimisation_algo=optimisation_algo, verbose=verbose)
+        inferred_params, negll = likelihood.optimise_neg_ll(S=self.S, initial_vals=list(initial_values.values()),
+                                                             lower_bounds=list(lower_bounds.values()), 
+                                                             upper_bounds=list(upper_bounds.values()),
+                                                             optimisation_algo=optimisation_algo, verbose=verbose)
 
         return InferredDemography(theta0=inferred_params[0], theta1=inferred_params[1], theta2=inferred_params[2],
                                     theta1_prime=inferred_params[3], theta2_prime=inferred_params[4],

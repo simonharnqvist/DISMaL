@@ -8,9 +8,11 @@ dismal/likelihood.py
 dismal/likelihood_matrix.py
 dismal/metrics.py
 dismal/preprocess.py
+dismal/s_matrix.py
 dismal/setup_cython.py
 dismal/simulate.py
 dismal/stochastic_matrix.py
+dismal/utils.py
 dismal.egg-info/PKG-INFO
 dismal.egg-info/SOURCES.txt
 dismal.egg-info/dependency_links.txt
