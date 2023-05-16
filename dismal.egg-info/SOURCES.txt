@@ -4,9 +4,11 @@ dismal/__init__.py
 dismal/blocking.py
 dismal/demography.py
 dismal/generator_matrices.py
+dismal/inference.py
 dismal/likelihood.py
 dismal/likelihood_matrix.py
 dismal/metrics.py
+dismal/popgen.py
 dismal/preprocess.py
 dismal/s_matrix.py
 dismal/setup_cython.py

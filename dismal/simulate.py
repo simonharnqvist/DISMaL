@@ -28,10 +28,10 @@ class MsprimeSimulation:
         self.S = self.simulate()
 
     def __repr__(self):
-        return self.S
+        return str(self.S)
     
     def __str__(self):
-        return self.S
+        return str(self.S)
 
     @staticmethod
     def coal_to_generations(coal_time, Ne):
