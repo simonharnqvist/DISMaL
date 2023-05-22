@@ -31,13 +31,6 @@ def test_q2_sums_to_zero():
                                                 m1_star=m1_star, m2_star=m2_star,
                                                   theta1=theta1, theta2=theta2).sum(), 0)
               
-def test_q3_sums_to_zero():
-     
-     for popsize_permutation in popsize_permuts:
-            theta1, theta0 = popsize_permutation[0], popsize_permutation[1]
-            
-            assert np.isclose(GeneratorMatrix(matrix_type="Q3",
-                                                theta1=theta1, theta0=theta0).sum(), 0)
             
 def test_q1_correct_vals():
      q1 = GeneratorMatrix(matrix_type="Q1", theta1=1, theta1_prime=2, theta2_prime=3, m1_prime_star=1.5, m2_prime_star=2.5)

@@ -5,14 +5,11 @@ import scipy
 
 class DemographicModel:
 
-    def __init__(self, model_name=None, pop_size_change=False, migration=False,
+    def __init__(self, pop_size_change=False, migration=False,
                  mig_rate_change=False, assymmetric_m=False,
                  assymmetric_m_star=False, assymmetric_m_prime_star=False,
                  remove_mig_params=None, thetas_iv=5, mig_rates_iv=0.3,
                  taus_iv=5, thetas_lb=0.01, mig_rates_lb=0, taus_lb=0):
-        """TODO: secondary_contact, initial_migration, assymm_sc, assymm_im parameters"""
-
-        self.model_name = model_name
 
         self.thetas = {"theta0": (thetas_iv, thetas_lb), "theta1": (
             thetas_iv, thetas_lb), "theta2": (thetas_iv, thetas_lb)}
@@ -58,17 +55,14 @@ class DemographicModel:
 
         self.param_names = list(self.thetas.keys()) + \
             list(self.taus.keys()) + list(self.mig_rates.keys())
-
-        self.initial_values = [i[0] for i in self.thetas.values(
-        )] + [i[0] for i in self.taus.values()] + [i[0] for i in self.mig_rates.values()]
-
-        self.lower_bounds = [i[1] for i in self.thetas.values(
-        )] + [i[1] for i in self.taus.values()] + [i[1] for i in self.mig_rates.values()]
+        
+        self.initial_values = [i[0] for i in self.thetas.values()] + [i[0] for i in self.taus.values()] + [i[0] for i in self.mig_rates.values()]
+        
+        self.lower_bounds = [i[1] for i in self.thetas.values()] + [i[1] for i in self.taus.values()] + [i[1] for i in self.mig_rates.values()]
         print(
-            f"""Model name: {self.model_name},
-              Model parameters: {self.param_names},
-                Initial values: {self.initial_values},
-                  Lower bounds: {self.lower_bounds}""")
+            f"Model parameters: {self.param_names}, \
+              Initial values: {self.initial_values} \
+                Lower bounds: {self.lower_bounds}")
 
     @staticmethod
     def composite_likelihood(param_vals, param_names, S, verbose=False):
@@ -83,8 +77,7 @@ class DemographicModel:
 
     def infer(self, S, verbose=False):
 
-        bounds = list(
-            zip(self.lower_bounds, [None for i in range(0, len(self.param_names))]))
+        bounds = list(zip(self.lower_bounds, [None for i in range(0, len(self.param_names))]))
 
         for optimisation_algo in ["L-BFGS-B", "Nelder-Mead", "Powell"]:
             optimised = scipy.optimize.minimize(self.composite_likelihood,
@@ -101,10 +94,9 @@ class DemographicModel:
 
         if optimised.success:
             inferred_params = dict(zip(self.param_names, optimised.x))
-            n_params = len(self.param_names)
             negll = optimised.fun
         else:
             raise RuntimeError(
                 "Optimisers L-BFGS-B, Nelder-Mead, and Powell all failed to maximise the likelihood")
 
-        return inferred_params, negll, n_params
+        return inferred_params, negll

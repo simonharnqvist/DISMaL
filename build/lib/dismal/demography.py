@@ -133,7 +133,7 @@ class DemographicModel:
         """
 
         # Set initial vals from data estimates
-        # TODO: is there a good way of calculating dxy for tau (this probably needs to be done from VCF, not counts)
+        # TODO: calculate dxy as mean S between populations, scaled by block length
         if theta1_prime_iv is None:
             theta1_prime_iv = self.theta1_prime_est
             print(f"Estimated pi for population 1: {theta1_prime_iv}")

@@ -76,10 +76,54 @@ def likelihood_matrix(q1, q2, q3, t1, v, S=None, s_vals=None):
     
     return ll_matrix
 
-def composite_neg_ll(params, S, verbose=False):
+def composite_neg_ll(param_vals, param_names, S, verbose=False):
     """S = matrix of s_counts per state and s_value"""
 
-    theta0, theta1, theta2, theta1_prime, theta2_prime, t1, v, m1_star, m2_star, m1_prime_star, m2_prime_star = params
+    params = dict(zip(param_names, param_vals))
+
+    theta0 = params["theta0"]
+    theta1 = params["theta1"]
+    theta2 = params["theta2"]
+
+    if "theta1_prime" in list(params.keys()):
+        theta1_prime = params["theta1_prime"]
+    else:
+        theta1_prime = params["theta1"]
+
+    if "theta2_prime" in list(params.keys()):
+        theta2_prime = params["theta2_prime"]
+    else:
+        theta2_prime = params["theta2"] 
+
+    if "M1_prime_star" in list(params.keys()):
+        m1_prime_star = params["M1_prime_star"]
+    elif "M1" in list(params.keys()):
+        m1_prime_star = params["M1"]
+    else:
+        m1_prime_star = 0
+
+    if "M2_prime_star" in list(params.keys()):
+        m2_prime_star = params["M2_prime_star"]
+    elif "M2" in list(params.keys()):
+        m2_prime_star = params["M2"]
+    else:
+        m2_prime_star = 0
+
+    if "M1_star" in list(params.keys()):
+        m1_star = params["M1_star"]
+    elif "M1" in list(params.keys()):
+        m1_star = params["M1"]
+    else:
+        m1_star = 0
+
+    if "M2_star" in list(params.keys()):
+        m2_star = params["M2_star"]
+    elif "M2" in list(params.keys()):
+        m2_star = params["M2"]
+    else:
+        m2_star = 0
+
+        
 
     q1 = GeneratorMatrix(matrix_type='Q1', theta1=theta1, theta1_prime=theta1_prime, theta2_prime=theta2_prime,
                           m1_prime_star=m1_prime_star, m2_prime_star=m2_prime_star)

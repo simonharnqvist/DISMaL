@@ -8,6 +8,7 @@ dismal/inference.py
 dismal/likelihood.py
 dismal/likelihood_matrix.py
 dismal/metrics.py
+dismal/model_fitting.py
 dismal/popgen.py
 dismal/preprocess.py
 dismal/s_matrix.py
@@ -21,3 +22,4 @@ dismal.egg-info/dependency_links.txt
 dismal.egg-info/top_level.txt
 tests/test_generator_matrices.py
 tests/test_likelihood.py
+tests/test_likelihood_matrix.py
