@@ -1,6 +1,7 @@
-from likelihood_matrix import LikelihoodMatrix
+from dismal.likelihood_matrix import LikelihoodMatrix
 import numpy as np
 import scipy
+import tqdm
 
 
 class DemographicModel:
@@ -8,67 +9,80 @@ class DemographicModel:
     def __init__(self, model_name=None, pop_size_change=False, migration=False,
                  mig_rate_change=False, assymmetric_m=False,
                  assymmetric_m_star=False, assymmetric_m_prime_star=False,
-                 remove_mig_params=None, thetas_iv=5, mig_rates_iv=0.3,
-                 taus_iv=5, thetas_lb=0.01, mig_rates_lb=0, taus_lb=0):
-        """TODO: secondary_contact, initial_migration, assymm_sc, assymm_im parameters"""
+                 remove_mig_params=None):
+        """TODO: secondary_contact, initial_migration, assymm_sc, assymm_im parameters
+
+        Parameters in next version:
+        * demes (specification in Demes format; use given values as initial values)
+        * n_stages [2,3]
+        * migration [T,F]
+        * mig_rate_change
+            * mig_stage2
+            * mig_stage3
+        * assymmetric_mig
+            * asymmetric_mig_stage2
+            * asymmetric_mig_stage3
+        * pop_size_change
+        * assymmetric_pop_sizes = T
+            * symmetric_popsize_stage2
+            * symmetric_popsize_stage3
+
+        Also allow prespecified models using model_name
+
+        """
 
         self.model_name = model_name
 
-        self.thetas = {"theta0": (thetas_iv, thetas_lb), "theta1": (
-            thetas_iv, thetas_lb), "theta2": (thetas_iv, thetas_lb)}
-        self.mig_rates = {}
-        self.taus = {}
+        self.thetas = ["theta0", "theta1", "theta2"]
+        self.taus = []
+        self.Ms = []
 
         if pop_size_change or mig_rate_change:
-            self.taus["t1"] = (taus_iv, taus_lb)
-            self.taus["v"] = (taus_iv, taus_lb)
+            self.taus.extend(["t1", "v"])
         else:
-            self.taus["t0"] = (taus_iv, taus_lb)
+            self.taus.append("t0")
 
         if pop_size_change:
-            self.thetas["theta1_prime"] = (thetas_iv, thetas_lb)
-            self.thetas["theta2_prime"] = (thetas_iv, thetas_lb)
+            self.thetas.extend(["theta1_prime", "theta2_prime"])
 
         if migration:
             if not mig_rate_change:
                 if assymmetric_m:
-                    self.mig_rates["M1"] = (mig_rates_iv, mig_rates_lb)
-                    self.mig_rates["M2"] = (mig_rates_iv, mig_rates_lb)
+                    self.Ms.extend(["M1", "M2"])
                 else:
-                    self.mig_rates["M"] = (mig_rates_iv, mig_rates_lb)
+                    self.Ms.append("M")
             else:
                 if assymmetric_m_star:
-                    self.mig_rates["M1_star"] = (mig_rates_iv, mig_rates_lb)
-                    self.mig_rates["M2_star"] = (mig_rates_iv, mig_rates_lb)
+                    self.Ms.extend(["M1_star", "M2_star"])
                 else:
-                    self.mig_rates["M_star"] = (mig_rates_iv, mig_rates_lb)
+                    self.Ms.append("M_star")
                 if assymmetric_m_prime_star:
-                    self.mig_rates["M1_prime_star"] = (
-                        mig_rates_iv, mig_rates_lb)
-                    self.mig_rates["M2_prime_star"] = (
-                        mig_rates_iv, mig_rates_lb)
+                    self.Ms.extend(["M1_prime_star", "M2_prime_star"])
                 else:
-                    self.mig_rates["M_prime_star"] = (
-                        mig_rates_iv, mig_rates_lb)
+                    self.Ms.append("M_prime_star")
 
         if remove_mig_params is not None:
             for mig_param in remove_mig_params:
-                if mig_param in list(self.mig_rates.keys()):
-                    self.mig_rates.pop(mig_param)
+                if mig_param in list(self.Ms):
+                    self.Ms.remove(mig_param)
 
-        self.param_names = list(self.thetas.keys()) + \
-            list(self.taus.keys()) + list(self.mig_rates.keys())
+        self.model_params = self.thetas + self.taus + self.Ms
 
-        self.initial_values = [i[0] for i in self.thetas.values(
-        )] + [i[0] for i in self.taus.values()] + [i[0] for i in self.mig_rates.values()]
+    def __str__(self):
+        return f"""
+        DISMaL DemographicModel object.
+        Theta (population size) parameters: {self.thetas}
+        Tau (split time) parameters: {self.taus}
+        M (migration rate) parameters: {self.Ms}
+        """
 
-        self.lower_bounds = [i[1] for i in self.thetas.values(
-        )] + [i[1] for i in self.taus.values()] + [i[1] for i in self.mig_rates.values()]
-        print(
-            f"""Model name: {self.model_name},
-              Model parameters: {self.param_names},
-                Initial values: {self.initial_values},
-                  Lower bounds: {self.lower_bounds}""")
+    def __repr__(self):
+        return f"""
+        DISMaL DemographicModel object.
+        Theta (population size) parameters: {self.thetas}
+        Tau (split time) parameters: {self.taus}
+        M (migration rate) parameters: {self.Ms}
+        """
 
     @staticmethod
     def composite_likelihood(param_vals, param_names, S, verbose=False):
@@ -81,30 +95,73 @@ class DemographicModel:
 
         return negll
 
-    def infer(self, S, verbose=False):
+    def minimise_neg_likelihood(self, S, thetas_iv, taus_iv, migr_iv, thetas_lb,
+                                taus_lb, migr_lb, verbose=False, optimisation_algo="L-BFGS-B"):
+        """Find the minimum negative log-likelihood ("fixed" initial values)"""
 
-        bounds = list(
-            zip(self.lower_bounds, [None for i in range(0, len(self.param_names))]))
+        initial_thetas = [thetas_iv] * len(self.thetas)
+        initial_taus = [taus_iv] * len(self.taus)
+        initial_Ms = [migr_iv] * len(self.Ms)
+        initial_values = initial_thetas + initial_taus + initial_Ms
+
+        theta_bounds = [(thetas_lb, None)] * len(self.thetas)
+        tau_bounds = [(taus_lb, None)] * len(self.taus)
+        migr_bounds = [(migr_lb, None)] * len(self.Ms)
+        bounds = theta_bounds + tau_bounds + migr_bounds
 
         for optimisation_algo in ["L-BFGS-B", "Nelder-Mead", "Powell"]:
             optimised = scipy.optimize.minimize(self.composite_likelihood,
-                                                x0=np.array(
-                                                    self.initial_values),
+                                                x0=initial_values,
                                                 method=optimisation_algo,
-                                                args=(self.param_names,
+                                                args=(self.model_params,
                                                       S, verbose),
                                                 bounds=bounds)
             if optimised.success:
                 break
             else:
-                f"Optimiser {optimisation_algo} failed"
+                print(f"Optimiser {optimisation_algo} failed; trying again")
 
         if optimised.success:
-            inferred_params = dict(zip(self.param_names, optimised.x))
-            n_params = len(self.param_names)
+            inferred_params = dict(zip(self.model_params, optimised.x))
+            n_params = len(self.model_params)
             negll = optimised.fun
         else:
             raise RuntimeError(
                 "Optimisers L-BFGS-B, Nelder-Mead, and Powell all failed to maximise the likelihood")
 
         return inferred_params, negll, n_params
+
+    def infer(self, S, n_iterations=5,
+              thetas_dist_params=(3, 1),
+              taus_dist_params=(3, 1),
+              migr_dist_params=(0.3, 1),
+              thetas_lb=0.01, migr_lb=0, taus_lb=0,
+              verbose=False):
+        """Repeats optimisation; samples IVs from gamma distribution
+
+        Args:
+            S (_type_): _description_
+            verbose (bool, optional): _description_. Defaults to False.
+            optimisation_algo (str, optional): _description_. Defaults to "L-BFGS-B".
+        """
+
+        # sample initial values from gamma dist
+        initial_thetas = scipy.stats.gamma.rvs(
+            a=thetas_dist_params[0], scale=thetas_dist_params[1], size=n_iterations)
+        initial_taus = scipy.stats.gamma.rvs(
+            a=taus_dist_params[0], scale=taus_dist_params[1], size=n_iterations)
+        initial_migr = scipy.stats.gamma.rvs(
+            a=migr_dist_params[0], scale=migr_dist_params[1], size=n_iterations)
+
+        models = []
+        for i in tqdm.tqdm(range(n_iterations)):
+            if verbose:
+                print(
+                    f"Optimisation iteration {i} with initial theta = {initial_thetas[i]}, initial tau = {initial_taus[i]} and initial M = {initial_migr[i]}")
+            mod = self.minimise_neg_likelihood(
+                S=S, thetas_iv=initial_thetas[i], taus_iv=initial_taus[i],
+                migr_iv=initial_migr[i], thetas_lb=thetas_lb, taus_lb=taus_lb, migr_lb=migr_lb)
+            models.append(mod)
+
+        neglls = [models[i][1] for i in range(len(models))]
+        return models[neglls.index(min(neglls))]  # return best model

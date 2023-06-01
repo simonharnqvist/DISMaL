@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from preprocess import read_r_simulation
+from dismal.preprocess import read_r_simulation
 
 
 class SMatrix:
@@ -28,9 +28,19 @@ class SMatrix:
         return np.array(s_matrix)
 
     @staticmethod
-    def s_between_two_arrs(arr1, arr2):
+    def s_between_two_arrs(arr1, arr2, ignore_missing=True):
         assert len(arr1) == len(
             arr2), "Haplotype blocks must be of same length"
+
+        if ignore_missing:
+            # here ignore = remove element from both arrays if missing in either; missingness encoded with negative values
+            arr1_missing = np.where(arr1 < 0)[0]
+            arr2_missing = np.where(arr2 < 0)[0]
+            missing_idx = np.unique(
+                np.concatenate([arr1_missing, arr2_missing]))
+            arr1 = np.delete(arr1, missing_idx)
+            arr2 = np.delete(arr2, missing_idx)
+
         return len(arr1) - np.count_nonzero(arr1 == arr2)
 
     @staticmethod
@@ -54,7 +64,7 @@ class SMatrix:
 
         return np.array(s_matrix)
 
-    def generate_from_blockdict(self, blockdict, samples_dict):
+    def from_blockdict(self, blockdict, samples_dict, ignore_missing=True):
 
         s1 = []
         s2 = []
@@ -62,31 +72,34 @@ class SMatrix:
 
         populations = list(set(samples_dict.values()))
 
-        for chr in blockdict.keys():
-            for block in blockdict[chr].keys():
-                samples = random.sample(
-                    [sample for sample in blockdict[chr][block].keys()], 2)
-                haplotypes = random.choices(
-                    ["hap_1", "hap_2"], k=2)  # with replacement
-                sampled_haps = [blockdict[chr][block]
-                                [samples[i]][haplotypes[i]] for i in [0, 1]]
-                s = self.s_between_two_arrs(sampled_haps[0], sampled_haps[1])
+        for chrom in blockdict.keys():
+            for block in blockdict[chrom].keys():
+                samples = list(blockdict[chrom][block].keys())
 
-                pop1 = samples_dict.get(samples[0])
-                pop2 = samples_dict.get(samples[1])
-                assert pop1 in populations, print(
-                    f"{pop1} not in populations {populations}")
-                assert pop2 in populations, print(
-                    f"{pop2} not in populations {populations}")
+                if len(samples) >= 2:
+                    chosen_samples = random.sample(samples, k=2)
+                    haplotypes = random.choices(
+                        ["hap_1", "hap_2"], k=2)  # with replacement
+                    sampled_haps = [blockdict[chrom][block]
+                                    [chosen_samples[i]][haplotypes[i]] for i in [0, 1]]
+                    s = self.s_between_two_arrs(sampled_haps[0], sampled_haps[1],
+                                                ignore_missing=ignore_missing)
 
-                if pop1 != pop2:
-                    s3.append(s)
-                elif pop1 == pop2 == populations[0]:
-                    s1.append(s)
-                else:
-                    assert pop1 == pop2 == populations[1]
-                    s2.append(s)
+                    pop1 = samples_dict.get(chosen_samples[0])
+                    pop2 = samples_dict.get(chosen_samples[1])
+                    assert pop1 in populations, print(
+                        f"{pop1} not in populations {populations}")
+                    assert pop2 in populations, print(
+                        f"{pop2} not in populations {populations}")
+
+                    if pop1 != pop2:
+                        s3.append(s)
+                    elif pop1 == pop2 == populations[0]:
+                        s1.append(s)
+                    else:
+                        assert pop1 == pop2 == populations[1]
+                        s2.append(s)
 
         s_dicts = [self.counts_to_dict(s) for s in [s1, s2, s3]]
 
-        return self.s_matrix_from_dicts(s_dicts)
+        return self.from_dicts(s_dicts)
