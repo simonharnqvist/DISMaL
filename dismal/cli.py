@@ -41,10 +41,8 @@ def main():
     print(res)
 
     if args.results_json is not None:
-        with open(args.results_json, 'r+') as f:
-            dic = json.load(f)
-            dic.update(res)
-            json.dump(dic, f)
+        with open(args.results_json, "a+") as f:
+            json.dump(res, f)
 
 
 if __name__ == "__main__":

@@ -7,8 +7,8 @@ import tqdm
 class DemographicModel:
 
     def __init__(self, model_name=None, pop_size_change=False, migration=False,
-                 mig_rate_change=False, assymmetric_m=False,
-                 assymmetric_m_star=False, assymmetric_m_prime_star=False,
+                 mig_rate_change=False, asymmetric_m=False,
+                 asymmetric_m_star=False, asymmetric_m_prime_star=False,
                  remove_mig_params=None):
         """TODO: secondary_contact, initial_migration, assymm_sc, assymm_im parameters
 
@@ -19,11 +19,11 @@ class DemographicModel:
         * mig_rate_change
             * mig_stage2
             * mig_stage3
-        * assymmetric_mig
+        * asymmetric_mig
             * asymmetric_mig_stage2
             * asymmetric_mig_stage3
         * pop_size_change
-        * assymmetric_pop_sizes = T
+        * asymmetric_pop_sizes = T
             * symmetric_popsize_stage2
             * symmetric_popsize_stage3
 
@@ -47,16 +47,16 @@ class DemographicModel:
 
         if migration:
             if not mig_rate_change:
-                if assymmetric_m:
+                if asymmetric_m:
                     self.Ms.extend(["M1", "M2"])
                 else:
                     self.Ms.append("M")
             else:
-                if assymmetric_m_star:
+                if asymmetric_m_star:
                     self.Ms.extend(["M1_star", "M2_star"])
                 else:
                     self.Ms.append("M_star")
-                if assymmetric_m_prime_star:
+                if asymmetric_m_prime_star:
                     self.Ms.extend(["M1_prime_star", "M2_prime_star"])
                 else:
                     self.Ms.append("M_prime_star")
