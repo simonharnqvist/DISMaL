@@ -96,7 +96,7 @@ class DemographicModel:
         return negll
 
     def minimise_neg_likelihood(self, S, thetas_iv, taus_iv, migr_iv, thetas_lb,
-                                taus_lb, migr_lb, verbose=False, optimisation_algo="L-BFGS-B"):
+                                taus_lb, migr_lb, verbose=False):
         """Find the minimum negative log-likelihood ("fixed" initial values)"""
 
         initial_thetas = [thetas_iv] * len(self.thetas)
@@ -115,6 +115,12 @@ class DemographicModel:
                                                 method=optimisation_algo,
                                                 args=(self.model_params,
                                                       S, verbose),
+                                                # options={
+                                                #     "ftol": ftol,
+                                                #     "eps": eps,
+                                                #     "maxfun": maxfun,
+                                                #     "maxIs": max_iter
+                                                # },
                                                 bounds=bounds)
             if optimised.success:
                 break
@@ -160,7 +166,7 @@ class DemographicModel:
                     f"Optimisation iteration {i} with initial theta = {initial_thetas[i]}, initial tau = {initial_taus[i]} and initial M = {initial_migr[i]}")
             mod = self.minimise_neg_likelihood(
                 S=S, thetas_iv=initial_thetas[i], taus_iv=initial_taus[i],
-                migr_iv=initial_migr[i], thetas_lb=thetas_lb, taus_lb=taus_lb, migr_lb=migr_lb)
+                migr_iv=initial_migr[i], thetas_lb=thetas_lb, taus_lb=taus_lb, migr_lb=migr_lb, verbose=verbose)
             models.append(mod)
 
         neglls = [models[i][1] for i in range(len(models))]

@@ -24,6 +24,7 @@ def likelihood_ratio_test(model1, model2, alpha):
 
 
 def best_fit_model(models, true_mod=None):
+    """needs AIC threshold"""
     mod_names = list(models.keys())
     likelihoods = [models[mod][1] for mod in models]
     n_params = [models[mod][2] for mod in models]

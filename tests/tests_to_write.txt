@@ -1,0 +1,18 @@
+* inference.py*
+    -> composite_likelihood (static check for given parameter values) (DONE, and passes)
+
+* likelihood_matrix.py *
+    -> LikelihoodMatrix (static check for parameter values)
+    -> alpha_matrix (static check)
+    -> beta_matrix
+    -> gamma_matrix
+    -> two_stage_ll_matrix (DONE - check if passes)
+    -> three_stage_ll_matrix (DONE - check if passes)
+
+* s_matrix.py *
+    -> s_between_two_arrs (with and without missing values)
+    -> from_lists
+    -> from_dicts
+
+* blocking.py *
+Use example VCF to test blocking 

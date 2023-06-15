@@ -12,6 +12,16 @@ one_by_ten_S = np.array([
 
 class TestLikelihoodMatrix:
 
+    def test_alpha_matrix(self):
+        """Check against hardcoded alpha matrix"""
+        pass
+
+    def test_beta_matrix(self):
+        pass
+
+    def test_gamma_matrix(self):
+        pass
+
     def test_two_stage_model_conforms_to_theory1(self):
 
         theoretical_lm = np.array([

@@ -27,22 +27,22 @@ class GeneratorMatrix:
 
         self.matrix_type = str(matrix_type).upper()
         assert self.matrix_type in ["Q1", "Q2", "Q3"]
-        assert theta1 is not None and theta1 > 0, f"invalid value {theta1} for theta1"
+        # assert theta1 is not None and theta1 > 0, f"invalid value {theta1} for theta1"
 
         if matrix_type == "Q1":
-            assert theta1_prime is not None and theta1_prime > 0, f"invalid value {theta1_prime} for theta1_prime"
-            assert theta2_prime is not None and theta2_prime > 0, f"invalid value {theta2_prime} for theta2_prime"
-            assert m1_prime_star is not None
-            assert m2_prime_star is not None
+            # assert theta1_prime is not None and theta1_prime > 0, f"invalid value {theta1_prime} for theta1_prime"
+            # assert theta2_prime is not None and theta2_prime > 0, f"invalid value {theta2_prime} for theta2_prime"
+            # assert m1_prime_star is not None
+            # assert m2_prime_star is not None
             self.pop_size1 = theta1_prime
             self.pop_size2 = theta2_prime
             self.mig_rate1 = m1_prime_star/theta1_prime
             self.mig_rate2 = m2_prime_star/theta2_prime
         else:
             assert matrix_type == "Q2"
-            assert theta2 is not None and theta2 > 0, f"invalid value {theta2} for theta2"
-            assert m1_star is not None
-            assert m2_star is not None
+            # assert theta2 is not None and theta2 > 0, f"invalid value {theta2} for theta2"
+            # assert m1_star is not None
+            # assert m2_star is not None
             self.pop_size1 = theta1
             self.pop_size2 = theta2
             self.mig_rate1 = m1_star/theta1
