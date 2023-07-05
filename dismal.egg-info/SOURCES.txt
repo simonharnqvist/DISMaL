@@ -5,6 +5,7 @@ dismal/blocking.py
 dismal/cli.py
 dismal/demography.py
 dismal/generator_matrices.py
+dismal/generator_matrices_ext.py
 dismal/inference.py
 dismal/likelihood.py
 dismal/likelihood_matrix.py
