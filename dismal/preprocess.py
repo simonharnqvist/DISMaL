@@ -1,4 +1,3 @@
-import random
 import allel
 import pandas as pd
 import numpy as np
@@ -7,49 +6,77 @@ import os
 import itertools
 
 
-def _trim_blocks(df, blocklen):
-    start_indices = [random.randint(
-        df.iloc[row, 3], (df.iloc[row, 4]-blocklen)) for row in range(0, len(df))]
-    end_indices = np.array(start_indices) + blocklen+1
-    return pd.DataFrame({"chr": df.iloc[:, 0], "start": start_indices, "end": end_indices})
+def _filter_ld(blocks_df, min_block_distance):
+    """Filter blocks for minimum distance between them to reduce effect of LD"""
+    filtered_rows = [dict(blocks_df.iloc[0, :])]
+
+    for index, row in blocks_df.iterrows():
+        if (blocks_df.loc[index, "chr"] != filtered_rows[-1]["chr"]): # if different chromosomes, add block
+            filtered_rows.append(dict(blocks_df.iloc[index, :]))
+        elif (blocks_df.loc[index, "start"] - filtered_rows[-1]["end"] > min_block_distance): # if same chromosome, check distance, add if far enough apart
+            filtered_rows.append(dict(blocks_df.iloc[index, :]))
+        else:
+            pass
+
+    return pd.DataFrame(filtered_rows)
 
 
-def _filter_ld(df, ld_bp):
-    sorted = df.sort_values(["chr", "start"])
+def _expand_intron_to_blocks(row, blocklen):
+    """Expand an intron (row) to blocks of length blocklen"""
+    start = row["start"]
+    end = row["end"]
+    assert end - start >= blocklen
 
-    filtered_dfs = []
-    for chromosome in df["chr"].unique():
-        df_chr = sorted[sorted["chr"] == chromosome]
-        filtered = np.where([sorted.iloc[row, 1] - df_chr.iloc[row-1, 2]
-                            > ld_bp for row in range(1, len(df_chr)-1)])
-        filtered_dfs.append(df_chr.iloc[filtered[0], :])
+    start_idxs = list(range(start, end, blocklen+1))
+    end_idxs = [i+blocklen for i in start_idxs]
 
-    return pd.concat(filtered_dfs)
+    if end_idxs[-1] > end:  # if last block overshoots
+        start_idxs.pop(-1)
+        end_idxs.pop(-1)
+
+    intron_blocks = pd.DataFrame(columns=["chr", "start", "end"])
+    intron_blocks["chr"] = [row["chr"]] * len(start_idxs)
+    intron_blocks["start"] = start_idxs
+    intron_blocks["end"] = end_idxs
+
+    return intron_blocks
 
 
-def gff3_to_blocks(gff3_path, blocklen, ld_dist_bp):
+def gff3_to_blocks(gff3_path, blocklen, ld_dist_bp, parquet_path=None):
     """Subset GFF3 file for intronic blocks of length blocklen, at least ld_dist apart"""
 
     pd.set_option('chained_assignment', None)
 
-    gff = allel.gff3_to_dataframe(gff3_path)
+    gff = allel.gff3_to_dataframe(gff3_path)[["seqid", "type", "start", "end"]]
+    gff.columns = ["chr", "type", "start", "end"]
 
     # Subset intronic regions
     introns_df = gff[gff["type"] == "intron"]
 
-    # Subset len > blocklen, and trim to blocklen
-    blocks_df = _trim_blocks(
-        introns_df[(introns_df["end"] - introns_df["start"]) > blocklen], blocklen)
+    # Subset len(intron) > blocklen
+    introns_min_blocklen = introns_df[(
+        introns_df["end"] - introns_df["start"]) > blocklen]
+
+    # Expand each intron to multiple blocks of length blocklen
+    blocks_unfiltered = pd.concat([_expand_intron_to_blocks(introns_min_blocklen.iloc[row, :],
+                                                            blocklen=blocklen) for row in range(len(introns_min_blocklen))])
+    blocks_unfiltered = blocks_unfiltered.reset_index(drop=True)
 
     # Filter for LD
-    blocks_ld_filtered = _filter_ld(blocks_df, ld_dist_bp)
+    blocks_ld_filtered = _filter_ld(blocks_unfiltered, ld_dist_bp)
 
     # Include block information in output df
     blocks_ld_filtered.loc[:, "block_id"] = blocks_ld_filtered.loc[:, "chr"] + ":" + \
         blocks_ld_filtered.loc[:, "start"].astype(
-            str) + "-" + blocks_ld_filtered.loc[:, "end"].astype(str)
+            str) + "-"
+    + blocks_ld_filtered.loc[:, "end"].astype(str)
 
-    return blocks_ld_filtered
+    blocks = blocks_ld_filtered
+
+    if parquet_path is not None:
+        blocks.to_parquet(parquet_path)
+
+    return blocks
 
 
 class CallSet:
@@ -89,13 +116,16 @@ def block_snps(callset, blocks):
 
 def block_callset(callset, gt_idxs, ploidy=2):
     """Get the callset for a block defined by GT indices, divided by haplotype"""
-    block_calls = pd.DataFrame(list(itertools.product(callset.samples, list(range(ploidy)))),
-                               columns=["sample", "hap"])
+    block_calls = pd.DataFrame(list(itertools.product(
+        callset.samples,
+        list(range(ploidy)))),
+        columns=["sample", "hap"])
 
     for idx in gt_idxs:
         block_calls[idx] = callset.gt[idx].flatten()
 
-    return block_calls.dropna()
+    block_calls = block_calls.dropna()
+    return block_calls
 
 
 def n_segr_sites(block_callset):
@@ -103,67 +133,76 @@ def n_segr_sites(block_callset):
     return sum(block_callset.iloc[0, 2:] != block_callset.iloc[1, 2:])
 
 
-def segregating_sites_spectrum(callset, block_snps, samples_map_df, blocklen, ploidy=2, sampling_probabilities=[0.25, 0.25, 0.5]):
+class SegregatingSitesSpectrum:
 
-    rng = np.random.default_rng()
+    def __init__(self,
+                 blocks,
+                 callset,
+                 samples_map,
+                 blocklen=100,
+                 ld_dist_bp=1000,
+                 ploidy=2,
+                 sampling_probabilities=[0.25, 0.25, 0.5]):
 
-    populations = samples_map_df["population"].unique()
-    pop1 = list(samples_map_df["sample"]
-                [samples_map_df["population"] == populations[0]])
-    pop2 = list(samples_map_df["sample"]
-                [samples_map_df["population"] == populations[1]])
+        self.blocks = blocks
+        self.callset = callset
+        self.samples_map = samples_map
+        self.blocklen = blocklen
+        self.ld_dist_bp = ld_dist_bp
+        self.ploidy = ploidy
+        self.sampling_probabilities = sampling_probabilities
 
-    sss = np.zeros(shape=(3, blocklen))
+        self.block_snps = block_snps(self.callset, self.blocks)
+        self.s3 = self.calculate()
 
-    for block in block_snps["block_id"].unique():
-        block_gt_idxs = list(
-            block_snps[block_snps["block_id"] == block]["gt_idx"])
-        block_callset_df = block_callset(callset,
-                                         block_gt_idxs,
-                                         ploidy=ploidy)
+    def __repr__(self):
+        return str(self.s3)
 
-        sampling_state = int(np.where(rng.multinomial(
-            n=1, pvals=sampling_probabilities) == 1)[0]) + 1
+    def __str__(self):
+        return self.s3
 
-        if sampling_state == 1:
-            block_sss = n_segr_sites(
-                block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=2))
-        elif sampling_state == 2:
-            block_sss = n_segr_sites(
-                block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2))
-        else:
-            assert sampling_state == 3
-            block_sss = n_segr_sites(pd.concat([block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=1),
-                                     block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2)]))
+    def calculate(self):
+        rng = np.random.default_rng()
 
-        sss[sampling_state-1, int(block_sss)
-            ] = sss[sampling_state-1, int(block_sss)] + 1
+        populations = self.samples_map["population"].unique()
+        pop1 = list(self.samples_map["sample"]
+                    [self.samples_map["population"] == populations[0]])
+        pop2 = list(self.samples_map["sample"]
+                    [self.samples_map["population"] == populations[1]])
 
-    return sss
+        sss = np.zeros(shape=(3, self.blocklen))
 
+        for block in self.block_snps["block_id"].unique():
+            block_gt_idxs = list(
+                self.block_snps[self.block_snps["block_id"] == block]["gt_idx"])
+            block_callset_df = block_callset(self.callset,
+                                             block_gt_idxs,
+                                             ploidy=self.ploidy)
 
-def from_gff3_vcf(gff3_path,
-                  vcf_path,
-                  zarr_path,
-                  samples_map,
-                  blocklen=100,
-                  ld_dist_bp=1000,
-                  ploidy=2,
-                  sampling_probabilities=[0.25, 0.25, 0.5]):
-    """Preprocess a GFF3 annotation and VCF file to segregating sites spectrum."""
+            sampling_state = int(np.where(rng.multinomial(
+                n=1, pvals=self.sampling_probabilities) == 1)[0]) + 1
 
-    blocks = gff3_to_blocks(
-        gff3_path, blocklen=blocklen, ld_dist_bp=ld_dist_bp)
-    callset = CallSet(vcf_path, zarr_path)
-    block_snps_df = block_snps(callset, blocks)
+            if sampling_state == 1:
+                block_sss = n_segr_sites(
+                    block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=2))
+            elif sampling_state == 2:
+                block_sss = n_segr_sites(
+                    block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2))
+            else:
+                assert sampling_state == 3
+                block_sss = n_segr_sites(pd.concat([block_callset_df[
+                    block_callset_df["sample"].isin(pop1)].sample(n=1),
+                    block_callset_df[
+                    block_callset_df["sample"].isin(pop2)].sample(n=2)]))
 
-    samples_map_df = pd.read_csv(samples_map)
+            sss[sampling_state-1,
+                int(block_sss)] = sss[sampling_state-1, int(block_sss)] + 1
 
-    s3 = segregating_sites_spectrum(callset,
-                                    block_snps=block_snps_df,
-                                    samples_map_df=samples_map_df,
-                                    blocklen=blocklen,
-                                    ploidy=ploidy,
-                                    sampling_probabilities=sampling_probabilities)
+        return sss
 
-    return s3
+    def to_zarr(self, path):
+        return zarr.convenience.save_array(path, self.s3)
+
+    @classmethod
+    def from_zarr(self, path):
+        return zarr.convenience.load(path)

@@ -1,317 +1,253 @@
-from collections import Counter
-import numpy as np
-import itertools
-import allel
-from collections import defaultdict
 import random
-import functools
-import operator
-import collections
+import allel
 import pandas as pd
-import glob
-import tqdm
+import numpy as np
 import zarr
-
-#  Workflow: 1) read VCF; 2) split into blocks; 3) select 1 hap per individual; 4) calculate s
-
-# TODO:
-# Unphased data (random phasing)
+import os
+import itertools
 
 
-def read_r_simulation(filepath):
-    return list(pd.read_csv(filepath, sep=" ").iloc[:, 0])
+# def _trim_blocks(df, blocklen):
+#    """Superceded by _expand_intron_to_blocks"""
+#     # need to split introns
+#     start_indices = [random.randint(
+#         df.iloc[row, 3], (df.iloc[row, 4]-blocklen)) for row in range(0, len(df))]
+#     end_indices = np.array(start_indices) + blocklen+1
+#     return pd.DataFrame({"chr": df.iloc[:, 0], "start": start_indices, "end": end_indices})
 
 
-class NestedDefaultDict(defaultdict):
-    """From https://stackoverflow.com/questions/19189274/nested-defaultdict-of-defaultdict"""
+def _filter_ld(df, ld_bp):
+    sorted = df.sort_values(["chr", "start"])
 
-    def __init__(self, *args, **kwargs):
-        super(NestedDefaultDict, self).__init__(
-            NestedDefaultDict, *args, **kwargs)
+    filtered_dfs = []
+    for chromosome in df["chr"].unique():
+        df_chr = sorted[sorted["chr"] == chromosome]
+        filtered = np.where([sorted.iloc[row, 1] - df_chr.iloc[row-1, 2]
+                            > ld_bp for row in range(1, len(df_chr)-1)])
+        filtered_dfs.append(df_chr.iloc[filtered[0], :])
+
+    return pd.concat(filtered_dfs)
+
+
+def _expand_intron_to_blocks(row, blocklen):
+    """Expand an intron (row) to blocks of length blocklen"""
+    start = row["start"]
+    end = row["end"]
+    assert end - start >= blocklen
+
+    start_idxs = list(range(start, end, blocklen+1))
+    end_idxs = [i+blocklen for i in start_idxs]
+
+    if end_idxs[-1] > end:  # if last block overshoots
+        start_idxs.pop(-1)
+        end_idxs.pop(-1)
+
+    intron_blocks = pd.DataFrame(columns=["chr", "start", "end"])
+    intron_blocks["chr"] = [row["chr"]] * len(start_idxs)
+    intron_blocks["start"] = start_idxs
+    intron_blocks["end"] = end_idxs
+
+    return intron_blocks
+
+
+def gff3_to_blocks(gff3_path, blocklen, ld_dist_bp):
+    """Subset GFF3 file for intronic blocks of length blocklen, at least ld_dist apart"""
+
+    pd.set_option('chained_assignment', None)
+
+    print(gff3_path)
+    gff = allel.gff3_to_dataframe(gff3_path)[["seqid", "type", "start", "end"]]
+    gff.columns = ["chr", "type", "start", "end"]
+
+    # Subset intronic regions
+    introns_df = gff[gff["type"] == "intron"]
+
+    # Subset len(intron) > blocklen
+    introns_min_blocklen = introns_df[(
+        introns_df["end"] - introns_df["start"]) > blocklen]
+
+    # Expand each intron to multiple blocks of length blocklen
+    blocks_unfiltered = pd.concat([_expand_intron_to_blocks(introns_min_blocklen.iloc[row, :],
+                                                            blocklen=blocklen) for row in range(len(introns_min_blocklen))])
+
+    # Filter for LD
+    blocks_ld_filtered = _filter_ld(blocks_unfiltered, ld_dist_bp)
+
+    # Include block information in output df
+    blocks_ld_filtered.loc[:, "block_id"] = blocks_ld_filtered.loc[:, "chr"] + ":" + \
+        blocks_ld_filtered.loc[:, "start"].astype(
+            str) + "-" + blocks_ld_filtered.loc[:, "end"].astype(str)
+
+    return blocks_ld_filtered
+
+
+class CallSet:
+    """Class to represent a skallele callset (i.e. a VCF)"""
+
+    def __init__(self, vcf_path=None, zarr_path=None):
+
+        if zarr_path is None:
+            self.zarr_path = "zarrstore"
+        else:
+            self.zarr_path = zarr_path
+
+        if vcf_path is None:
+            assert zarr_path is not None
+
+        self.vcf_path = vcf_path
+        if not os.path.exists(self.zarr_path):
+            allel.vcf_to_zarr(self.vcf_path, self.zarr_path,
+                              fields=["samples", "calldata/GT", "variants/CHROM", "variants/POS"], overwrite=False)
+
+        self.callset = zarr.open_group(zarr_path, mode='r')
+        self.chromosomes = self.callset["variants/CHROM"][:]
+        self.samples = self.callset["samples"][:]
+        self.gt = self.callset["calldata/GT"][:]
+        self.pos = self.callset["variants/POS"][:]
+        self.callset_positions_df = pd.DataFrame(
+            {"chr": self.chromosomes, "pos": self.pos})
+
+        self.callset_positions_df["gt_idx"] = self.callset_positions_df.index
+
+
+def block_snps(callset, blocks):
+    """Merge block and callset information to get dataframe of SNPs and which block they belong to"""
+    return blocks.merge(callset.callset_positions_df, how='left', on="chr") \
+        .query('pos.between(`start`, `end`)')
+
+
+def block_callset(callset, gt_idxs, ploidy=2):
+    """Get the callset for a block defined by GT indices, divided by haplotype"""
+    block_calls = pd.DataFrame(list(itertools.product(callset.samples, list(range(ploidy)))),
+                               columns=["sample", "hap"])
+
+    for idx in gt_idxs:
+        block_calls[idx] = callset.gt[idx].flatten()
+
+    block_calls = block_calls.dropna()
+    return block_calls
+
+
+def n_segr_sites(block_callset):
+    """Count segregating sites between samples of length 2 from a block callset"""
+    return sum(block_callset.iloc[0, 2:] != block_callset.iloc[1, 2:])
+
+
+def get_segregating_sites_spectrum(callset, block_snps, samples_map_df, blocklen, ploidy=2, sampling_probabilities=[0.25, 0.25, 0.5]):
+
+    rng = np.random.default_rng()
+
+    populations = samples_map_df["population"].unique()
+    pop1 = list(samples_map_df["sample"]
+                [samples_map_df["population"] == populations[0]])
+    pop2 = list(samples_map_df["sample"]
+                [samples_map_df["population"] == populations[1]])
+
+    sss = np.zeros(shape=(3, blocklen))
+
+    for block in block_snps["block_id"].unique():
+        block_gt_idxs = list(
+            block_snps[block_snps["block_id"] == block]["gt_idx"])
+        block_callset_df = block_callset(callset,
+                                         block_gt_idxs,
+                                         ploidy=ploidy)
+
+        sampling_state = int(np.where(rng.multinomial(
+            n=1, pvals=sampling_probabilities) == 1)[0]) + 1
+
+        if sampling_state == 1:
+            block_sss = n_segr_sites(
+                block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=2))
+        elif sampling_state == 2:
+            block_sss = n_segr_sites(
+                block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2))
+        else:
+            assert sampling_state == 3
+            block_sss = n_segr_sites(pd.concat([block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=1),
+                                     block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2)]))
+
+        sss[sampling_state-1, int(block_sss)
+            ] = sss[sampling_state-1, int(block_sss)] + 1
+
+    return sss
+
+
+class SegregatingSitesSpectrum:
+
+    def __init__(self,
+                 gff3_path,
+                 vcf_path,
+                 zarr_path,
+                 samples_map,
+                 blocklen=100,
+                 ld_dist_bp=1000,
+                 ploidy=2,
+                 sampling_probabilities=[0.25, 0.25, 0.5]):
+
+        self.gff3_path = gff3_path,
+        self.vcf_path = vcf_path,
+        self.zarr_path = zarr_path,
+        self.samples_map = pd.read_csv(samples_map)
+        self.blocklen = blocklen,
+        self.ld_dist_bp = ld_dist_bp,
+        self.ploidy = ploidy,
+        self.sampling_probabilities = sampling_probabilities
+
+        self.blocks = gff3_to_blocks(
+            self.gff3_path,
+            blocklen=self.blocklen,
+            ld_dist_bp=self.ld_dist_bp)
+
+        self.callset = CallSet(self.vcf_path, self.zarr_path)
+
+        self.block_snps = block_snps(self.callset, self.blocks)
+
+        self.s3 = get_segregating_sites_spectrum(self.callset,
+                                                 block_snps=self.block_snps_df,
+                                                 samples_map_df=self.samples_map,
+                                                 blocklen=blocklen,
+                                                 ploidy=ploidy,
+                                                 sampling_probabilities=sampling_probabilities)
 
     def __repr__(self):
-        return str(dict(self))
-
-
-class BlocksDictionary(defaultdict):
-    """This is a mess"""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def create(self, vcf_path, zarr_path, make_blocks=False, block_length=None, n_blocks=None):
-        blocks_dictionary = NestedDefaultDict()
-
-        allel.vcf_to_zarr(vcf_path, zarr_path,
-                          fields=["samples", "calldata/GT", "variants/CHROM", "variants/POS"], overwrite=True)
-        callset = zarr.open_group(zarr_path, mode='r')
-        chromosomes = callset["variants/CHROM"][:]
-        samples = callset["samples"][:]
-        gt = callset["calldata/GT"][:]
-        pos = callset["variants/POS"][:]
-
-        if make_blocks:
-            assert block_length is not None
-            assert n_blocks is not None
-
-            for chr in list(set(chromosomes)):
-                block_idx = self.make_blocks_indices_chr(
-                    chr=chr, chromosome_idx=chromosomes, pos=pos, block_length=block_length, n_blocks=n_blocks)
-                for (start_idx, end_idx) in block_idx:
-                    for i in range(0, len(samples)):
-                        for hap in [0, 1]:
-                            blocks_dictionary[chr][f"{chr}:{start_idx}-{end_idx}"][samples[i]
-                                                                                   ][f"hap_{hap+1}"] = gt[start_idx:end_idx, i][:, hap]
-        else:  # treat VCF as single block
-            for i in range(0, len(samples)):
-                for hap in [0, 1]:
-                    blocks_dictionary["1"]["1"][samples[i]
-                                                ][f"hap_{hap+1}"] = gt[:, i][:, hap]
-
-        return blocks_dictionary
-
-    @staticmethod
-    def make_blocks_indices_chr(chr, chromosome_idx, pos, block_length, n_blocks):
-        """Make blocks for one chromosome"""
-
-        chr_indices = np.where(chromosome_idx == chr)
-
-        min_pos = min(pos[chr_indices])
-        max_pos = max(pos[chr_indices])
-        chr_len = max_pos-min_pos
-
-        n_all_blocks = int(chr_len/block_length)
-        assert n_all_blocks > n_blocks, "n_blocks is too high"
-
-        block_start_positions = np.array(
-            [i*block_length for i in range(0, n_all_blocks)]) + min_pos
-        block_end_positions = block_start_positions + block_length
-        blocks_idx = list(zip(block_start_positions, block_end_positions))
-
-        sampled_blocks_idx = random.sample(blocks_idx, int(n_blocks))
-
-        return sampled_blocks_idx
-
-
-def block_haplotypes(blockdict, chr, block, use_both_haps=False):
-    block = blockdict[chr][block]
-
-    if use_both_haps:
-        raise NotImplementedError(
-            "Using both haplotypes per block is not yet implemented")
-
-    haplotypes = []
-    for sample in block.keys():
-        i = random.randint(0, 1)
-        haplotypes.append(block[sample][f"hap_{i+1}"])
-
-    return haplotypes
-
-
-def block_haplotypes_per_population(blockdict, chr, block, population, samples_to_pop_map, use_both_haps=False):
-    block = blockdict[chr][block]
-
-    if use_both_haps:
-        raise NotImplementedError(
-            "Using both haplotypes per block is not yet implemented")
-
-    haplotypes = []
-
-    for sample in block.keys():
-        if samples_to_pop_map.get(sample) == population:
-            i = random.randint(0, 1)
-            haplotypes.append(block[sample][f"hap_{i+1}"])
-
-    return haplotypes
-
-
-def _subset_block_by_population(block, population, samples_to_pop_map):
-    return [sample for sample in block if get_samples_to_pop_map.get(sample) == population]
-
-
-def _sample_n_haplotypes_from_same_population(block, n):
-    samples = random.sample([sample for sample in block.keys()], n)
-
-    haplotypes = []
-    for sample in samples:
-        hap_idx = random.randint(0, 1)
-        haplotypes.append(block[sample][hap_idx])
-
-    assert len(haplotypes) == n
-
-    return haplotypes
-
-
-def sample_two_haplotypes(blockdict, chr, block, populations, samples_to_pop_map):
-    block = blockdict[chr][block]
-
-    if not isinstance(populations, list):
-        populations = list(populations)
-
-    if len(populations) == 1:
-        pop_block = _subset_block_by_population(
-            block, populations[0], samples_to_pop_map)
-        haplotypes = _sample_n_haplotypes_from_same_population(pop_block, 2)
-    elif len(populations) == 2:
-        pop1_block = _subset_block_by_population(
-            block, populations[0], samples_to_pop_map)
-        pop2_block = _subset_block_by_population(
-            block, populations[1], samples_to_pop_map)
-        haplotypes = [_sample_n_haplotypes_from_same_population(
-            pop_block, 1) for pop_block in [pop1_block, pop2_block]]
-    else:
-        raise ValueError(
-            "length of 'populations' argument must be either 1 or 2")
-
-    return haplotypes
-
-
-def get_samples_to_pop_map(samples_txt):
-    samples = pd.read_csv(samples_txt, header=None)
-    samples.columns = ["sample", "population"]
-    samples_dict = dict(zip(samples["sample"], samples["population"]))
-    assert len(list(set(samples_dict.values()))
-               ) == 2, f"{len(list(set(samples_dict.values())))} populations detected in {samples_txt} but only 2 are allowed"
-    return samples_dict
-
-
-def s_between_two_arrs(arr1, arr2):
-    assert len(arr1) == len(arr2), "Haplotype blocks must be of same length"
-    return len(arr1) - np.count_nonzero(arr1 == arr2)
-
-# def s_count_block(blockdict, chr, block, samples_to_pop_map):
-
-#     population_names = list(set(samples_to_pop_map.values()))
-
-#     # pop1_haps = block_haplotypes_per_population(blockdict, chr, block, population=population_names[0], samples_to_pop_map=samples_to_pop_map)
-#     # pop2_haps = block_haplotypes_per_population(blockdict, chr, block, population=population_names[1], samples_to_pop_map=samples_to_pop_map)
-
-#     # x1 = counts_to_dict([s_between_two_arrs(a,b) for a,b in itertools.combinations(pop1_haps, 2)])
-#     # x2 = counts_to_dict([s_between_two_arrs(a,b) for a,b in itertools.combinations(pop2_haps, 2)])
-#     # x3 = counts_to_dict([s_between_two_arrs(a,b) for a,b in itertools.product(pop1_haps, pop2_haps)])
-
-#     return x1, x2, x3
-
-
-def counts_to_dict(x):
-    """
-    Generate dictionary of counts of nucleotide difference (s-value) occurrences.
-    :param list x: list of nt differences between loci
-    :return: s_dict
-    """
-    s, s_count = np.unique(x, return_counts=True)
-    return dict(zip(s, s_count))
-
-
-def s_matrix(s_lists):
-    """s_lists = lists of s counts [[]]"""
-
-    max_len = np.max([np.max(l) for l in s_lists])
-    s_matrix = np.zeros(shape=(3, max_len+1))
-
-    for i in [0, 1, 2]:  # for each state
-        idx, count = np.unique(s_lists[i], return_counts=True)
-        for j in range(0, len(idx)):
-            s_matrix[i][idx[j]] = count[j]
-
-    return np.array(s_matrix)
-
-
-def s_matrix_from_dicts(dicts):
-    s_max = int(np.max([np.max(list(dicts[i].keys())) for i in [0, 1, 2]]))
-    s_matrix = []
-
-    for i in [0, 1, 2]:
-        s_vals = [dicts[i].get(j, 0) for j in range(
-            0, s_max)]  # return 0 if key not found
-        s_matrix.append(s_vals)
-
-    return np.array(s_matrix)
-
-
-def s_count(blockdict, samples_to_pop_map):
-
-    x1 = []
-    x2 = []
-    x3 = []
-
-    populations = list(set(samples_to_pop_map.values()))
-
-    for chr in blockdict.keys():
-        for block in blockdict[chr].keys():
-            samples = random.sample(
-                [sample for sample in blockdict[chr][block].keys()], 2)
-            haplotypes = random.choices(
-                ["hap_1", "hap_2"], k=2)  # with replacement
-            sampled_haps = [blockdict[chr][block]
-                            [samples[i]][haplotypes[i]] for i in [0, 1]]
-            s = s_between_two_arrs(sampled_haps[0], sampled_haps[1])
-
-            pop1 = samples_to_pop_map.get(samples[0])
-            pop2 = samples_to_pop_map.get(samples[1])
-            assert pop1 in populations, print(
-                f"{pop1} not in populations {populations}")
-            assert pop2 in populations, print(
-                f"{pop2} not in populations {populations}")
-
-            if pop1 != pop2:
-                x3.append(s)
-            elif pop1 == pop2 == populations[0]:
-                x1.append(s)
-            else:  # pop1 == pop2 == populations[1]
-                x2.append(s)
-
-    s_dicts = [counts_to_dict(x) for x in [x1, x2, x3]]
-
-    return s_dicts
-
-
-def vcf_to_s_count(vcf_path, samples_path, block_length=64, n_blocks=10000):
-    bd = BlocksDictionary()
-    blockdict = bd.create(vcf_path, block_length=block_length,
-                          n_blocks=n_blocks, make_blocks=True)
-    samples_map = get_samples_to_pop_map(samples_txt=samples_path)
-    return s_count(blockdict=blockdict, samples_to_pop_map=samples_map)
-
-
-def _sum_list_of_dicts_by_key(dicts):
-    return dict(functools.reduce(operator.add, map(collections.Counter, dicts)))
-
-
-def block_vcfs_to_s_count(directory, samples_path, file_pattern="*.vcf"):
-    """Read in and process multiple VCFs from independent simulations, each containing a block"""
-    samples_map = get_samples_to_pop_map(samples_txt=samples_path)
-
-    x1 = []
-    x2 = []
-    x3 = []
-    populations = list(set(samples_map.values()))
-
-    for vcf_path in tqdm.tqdm(glob.glob(f"{directory}/{file_pattern}")):
-        bd = BlocksDictionary()
-        blockdict = bd.create(vcf_path, make_blocks=False)
-
-        samples = random.sample(
-            [sample for sample in blockdict["1"]["1"].keys()], 2)
-        haplotypes = random.choices(
-            ["hap_1", "hap_2"], k=2)  # with replacement
-        sampled_haps = [blockdict["1"]["1"][samples[i]]
-                        [haplotypes[i]] for i in [0, 1]]
-        s = s_between_two_arrs(sampled_haps[0], sampled_haps[1])
-
-        pop1 = samples_map.get(samples[0])
-        pop2 = samples_map.get(samples[1])
-        assert pop1 in populations, print(
-            f"{pop1} not in populations {populations}")
-        assert pop2 in populations, print(
-            f"{pop2} not in populations {populations}")
-
-        if pop1 != pop2:
-            x3.append(s)
-        elif pop1 == pop2 == populations[0]:
-            x1.append(s)
-        else:  # pop1 == pop2 == populations[1]
-            x2.append(s)
-
-    s_dicts = [counts_to_dict(x) for x in [x1, x2, x3]]
-    return s_dicts
+        return self.s3
+
+    def __str__(self):
+        return self.s3
+
+    def calculate(self):
+        rng = np.random.default_rng()
+
+        populations = self.samples_map["population"].unique()
+        pop1 = list(self.samples_map["sample"]
+                    [self.samples_map["population"] == populations[0]])
+        pop2 = list(self.samples_map["sample"]
+                    [self.samples_map["population"] == populations[1]])
+
+        sss = np.zeros(shape=(3, self.blocklen))
+
+        for block in self.block_snps["block_id"].unique():
+            block_gt_idxs = list(
+                self.block_snps[block_snps["block_id"] == block]["gt_idx"])
+            block_callset_df = block_callset(self.callset,
+                                             block_gt_idxs,
+                                             ploidy=self.ploidy)
+
+        sampling_state = int(np.where(rng.multinomial(
+            n=1, pvals=self.sampling_probabilities) == 1)[0]) + 1
+
+        if sampling_state == 1:
+            block_sss = n_segr_sites(
+                block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=2))
+        elif sampling_state == 2:
+            block_sss = n_segr_sites(
+                block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2))
+        else:
+            assert sampling_state == 3
+            block_sss = n_segr_sites(pd.concat([block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=1),
+                                     block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2)]))
+
+        sss[sampling_state-1, int(block_sss)
+            ] = sss[sampling_state-1, int(block_sss)] + 1
+
+        return sss
