@@ -6,6 +6,7 @@ dismal/cli.py
 dismal/demography.py
 dismal/generator_matrices.py
 dismal/generator_matrices_ext.py
+dismal/infer.py
 dismal/inference.py
 dismal/likelihood.py
 dismal/likelihood_matrix.py
@@ -14,7 +15,6 @@ dismal/model_fitting.py
 dismal/popgen.py
 dismal/preprocess.py
 dismal/s_matrix.py
-dismal/setup_cython.py
 dismal/simulate.py
 dismal/stochastic_matrix.py
 dismal/utils.py

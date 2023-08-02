@@ -1,10 +1,13 @@
 import allel
 import pandas as pd
 import numpy as np
-import zarr
 import os
 import itertools
-
+import random
+from collections import Counter, deque
+import tqdm
+from numba import jit
+import time
 
 def _filter_ld(blocks_df, min_block_distance):
     """Filter blocks for minimum distance between them to reduce effect of LD"""
@@ -42,7 +45,7 @@ def _expand_intron_to_blocks(row, blocklen):
     return intron_blocks
 
 
-def gff3_to_blocks(gff3_path, blocklen, ld_dist_bp, parquet_path=None):
+def gff3_to_blocks(gff3_path, blocklen, min_block_distance, parquet_path=None):
     """Subset GFF3 file for intronic blocks of length blocklen, at least ld_dist apart"""
 
     pd.set_option('chained_assignment', None)
@@ -63,13 +66,10 @@ def gff3_to_blocks(gff3_path, blocklen, ld_dist_bp, parquet_path=None):
     blocks_unfiltered = blocks_unfiltered.reset_index(drop=True)
 
     # Filter for LD
-    blocks_ld_filtered = _filter_ld(blocks_unfiltered, ld_dist_bp)
+    blocks_ld_filtered = _filter_ld(blocks_unfiltered, min_block_distance)
 
     # Include block information in output df
-    blocks_ld_filtered.loc[:, "block_id"] = blocks_ld_filtered.loc[:, "chr"] + ":" + \
-        blocks_ld_filtered.loc[:, "start"].astype(
-            str) + "-"
-    + blocks_ld_filtered.loc[:, "end"].astype(str)
+    blocks_ld_filtered.loc[:, "block_id"] = blocks_ld_filtered.loc[:, "chr"] + ":" + blocks_ld_filtered.loc[:, "start"].astype(str) + "-" + blocks_ld_filtered.loc[:, "end"].astype(str)
 
     blocks = blocks_ld_filtered
 
@@ -82,22 +82,22 @@ def gff3_to_blocks(gff3_path, blocklen, ld_dist_bp, parquet_path=None):
 class CallSet:
     """Class to represent a skallele callset (i.e. a VCF)"""
 
-    def __init__(self, vcf_path=None, zarr_path=None):
+    def __init__(self, vcf_path=None, npz_path=None):
 
-        if zarr_path is None:
-            self.zarr_path = "zarrstore"
+        if npz_path is None:
+            self.npz_path = "vcf.npz"
         else:
-            self.zarr_path = zarr_path
+            self.npz_path = npz_path
 
         if vcf_path is None:
-            assert zarr_path is not None
+            assert npz_path is not None
 
         self.vcf_path = vcf_path
-        if not os.path.exists(self.zarr_path):
-            allel.vcf_to_zarr(self.vcf_path, self.zarr_path,
+        if not os.path.exists(self.npz_path):
+            allel.vcf_to_npz(self.vcf_path, self.npz_path,
                               fields=["samples", "calldata/GT", "variants/CHROM", "variants/POS"], overwrite=False)
 
-        self.callset = zarr.open_group(zarr_path, mode='r')
+        self.callset = np.load(self.npz_path, allow_pickle=True)
         self.chromosomes = self.callset["variants/CHROM"][:]
         self.samples = self.callset["samples"][:]
         self.gt = self.callset["calldata/GT"][:]
@@ -107,102 +107,130 @@ class CallSet:
 
         self.callset_positions_df["gt_idx"] = self.callset_positions_df.index
 
+def block_genotype_array(callset, chrom, start, end):
+    """Genotype array for block."""
+    snps_idxs = np.where((callset.chromosomes == chrom) & (callset.pos >= start) & (callset.pos <= end))
+    return callset.gt[snps_idxs]
 
-def block_snps(callset, blocks):
-    """Merge block and callset information to get dataframe of SNPs and which block they belong to"""
-    return blocks.merge(callset.callset_positions_df, how='left', on="chr") \
-        .query('pos.between(`start`, `end`)')
+def index_individuals_wo_missing_sites(block_gt_arr):
+    """Return indices of individuals that have no missing sites in a block"""
+    idxs_nonmissing = [np.where([(block_gt_arr[:, i] >= 0).all() 
+                                 for i in range(len(block_gt_arr[0]))])]
+    return idxs_nonmissing[0][0]
 
-
-def block_callset(callset, gt_idxs, ploidy=2):
-    """Get the callset for a block defined by GT indices, divided by haplotype"""
-    block_calls = pd.DataFrame(list(itertools.product(
-        callset.samples,
-        list(range(ploidy)))),
-        columns=["sample", "hap"])
-
-    for idx in gt_idxs:
-        block_calls[idx] = callset.gt[idx].flatten()
-
-    block_calls = block_calls.dropna()
-    return block_calls
+def n_segr_sites(arr):
+    """Count number of segregating sites between two sampled haplotype blocks."""
+    assert (arr >= 0).all(), "Missing sites detected; please remove them before calculating segregating sites."
+    return np.sum(arr[:, 0] != arr[:, 1])
 
 
-def n_segr_sites(block_callset):
-    """Count segregating sites between samples of length 2 from a block callset"""
-    return sum(block_callset.iloc[0, 2:] != block_callset.iloc[1, 2:])
+def deques_to_s_matrix(s_deques):
+    """Convert a list of 3 deques to a matrix of segregating sites."""
+    array_lengths = [int(max(Counter(s_deques[i]).keys())) + 1 for i in [0,1,2]]
+    max_s_value = max(array_lengths)
+    return np.array([[Counter(s_deques[i])[s] for s in range(max_s_value)] for i in [0, 1, 2]])
 
+def blockwise_segregating_sites(blocks, callset, samples, sampling_probs=[0.25, 0.25, 0.50]):
+    """Calculate the number of segregating sites between sampled haplotypes for each block."""
 
-class SegregatingSitesSpectrum:
+    pops_names = samples["population"].unique()
+    assert len(pops_names) == 2
+    pops_idxs = [np.where(np.array(samples.set_index("sample").loc[callset.samples, :]["population"]) == pop_name) for pop_name in pops_names]
 
-    def __init__(self,
-                 blocks,
-                 callset,
-                 samples_map,
-                 blocklen=100,
-                 ld_dist_bp=1000,
-                 ploidy=2,
-                 sampling_probabilities=[0.25, 0.25, 0.5]):
+    rng = np.random.default_rng()
 
-        self.blocks = blocks
-        self.callset = callset
-        self.samples_map = samples_map
-        self.blocklen = blocklen
-        self.ld_dist_bp = ld_dist_bp
-        self.ploidy = ploidy
-        self.sampling_probabilities = sampling_probabilities
+    S = [list(), list(), list()] # state 1,2,3
+    
+    for block_idx in tqdm.tqdm(range(len(blocks))):
 
-        self.block_snps = block_snps(self.callset, self.blocks)
-        self.s3 = self.calculate()
+        block_state = np.where(rng.multinomial(n=1, pvals=sampling_probs))[0][0] + 1
 
-    def __repr__(self):
-        return str(self.s3)
+        block_start, block_end, block_chr = (blocks.loc[block_idx, "start"],
+                                              blocks.loc[block_idx, "end"],
+                                                blocks.loc[block_idx, "chr"])
+        block_gt_arr = block_genotype_array(callset, block_chr, block_start, block_end)
+        if len(block_gt_arr) == 0:
+            continue
 
-    def __str__(self):
-        return self.s3
+        indivs_wo_missing_sites = index_individuals_wo_missing_sites(block_gt_arr)
+        if index_individuals_wo_missing_sites == 0:
+            continue
 
-    def calculate(self):
-        rng = np.random.default_rng()
+        pop1_nomissing = np.intersect1d(pops_idxs[0], indivs_wo_missing_sites)
+        pop2_nomissing = np.intersect1d(pops_idxs[1], indivs_wo_missing_sites)
 
-        populations = self.samples_map["population"].unique()
-        pop1 = list(self.samples_map["sample"]
-                    [self.samples_map["population"] == populations[0]])
-        pop2 = list(self.samples_map["sample"]
-                    [self.samples_map["population"] == populations[1]])
-
-        sss = np.zeros(shape=(3, self.blocklen))
-
-        for block in self.block_snps["block_id"].unique():
-            block_gt_idxs = list(
-                self.block_snps[self.block_snps["block_id"] == block]["gt_idx"])
-            block_callset_df = block_callset(self.callset,
-                                             block_gt_idxs,
-                                             ploidy=self.ploidy)
-
-            sampling_state = int(np.where(rng.multinomial(
-                n=1, pvals=self.sampling_probabilities) == 1)[0]) + 1
-
-            if sampling_state == 1:
-                block_sss = n_segr_sites(
-                    block_callset_df[block_callset_df["sample"].isin(pop1)].sample(n=2))
-            elif sampling_state == 2:
-                block_sss = n_segr_sites(
-                    block_callset_df[block_callset_df["sample"].isin(pop2)].sample(n=2))
+        if block_state == 1:
+            if len(pop1_nomissing) < 2:
+                continue
             else:
-                assert sampling_state == 3
-                block_sss = n_segr_sites(pd.concat([block_callset_df[
-                    block_callset_df["sample"].isin(pop1)].sample(n=1),
-                    block_callset_df[
-                    block_callset_df["sample"].isin(pop2)].sample(n=2)]))
+                samples_idxs = rng.choice(pop1_nomissing, 2)
+        elif block_state == 2:
+            if len(pop2_nomissing) < 2:
+                continue
+            else:
+                samples_idxs = rng.choice(pop2_nomissing, 2)
+        else:
+            assert block_state == 3
+            if len(pop1_nomissing) == 0 or len(pop2_nomissing) == 0:
+                continue
+            else:
+                samples_idxs = np.array([rng.choice(pop1_nomissing, 1), rng.choice(pop2_nomissing, 1)])
 
-            sss[sampling_state-1,
-                int(block_sss)] = sss[sampling_state-1, int(block_sss)] + 1
+        ploidy = len(block_gt_arr[0][0])
+        haplotype_idx = random.choice(range(0, ploidy))
+        sample_genotypes = block_gt_arr[:, samples_idxs, haplotype_idx]
 
-        return sss
+        s = n_segr_sites(sample_genotypes)
 
-    def to_zarr(self, path):
-        return zarr.convenience.save_array(path, self.s3)
+        S[block_state-1].append(s)
 
-    @classmethod
-    def from_zarr(self, path):
-        return zarr.convenience.load(path)
+
+    return S
+
+def from_vcf_gff3(vcf, gff3, samples_map, blocklen=100, min_block_distance=10_000,
+                   sampling_probs=[0.25, 0.25, 0.50],
+                     vcf_npz_path=None, block_parquet_path=None, segregating_sites_npy_path=None):
+    """Generate segregating sites spectrum from a VCF and GFF3 annotation. 
+
+    Args:
+        vcf (str): Path to VCF.
+        gff3 (str): Path to GFF3 annotation.
+        samples_map (str): Path to comma-separated file that maps sample ID -> population.
+        blocklen (int, optional): Length of genomic blocks to make. Defaults to 100.
+        min_block_distance (int, optional): Minimum distance in base pairs between blocks. Defaults to 10_000.
+        sampling_probs (list, optional): The weighting of each sampling state. Defaults to [0.25, 0.25, 0.50].
+        vcf_npz_path (str, optional): Path to which the npz of the VCF is written/read from. Defaults to None.
+        block_parquet_path (str, optional): Path to which the dataframe of blocks is written/read from. Defaults to None.
+        segregating_sites_npy_path (str, optional): Path to which the matrix of segregating sites is written. Defaults to None.
+
+    Returns:
+        segregating_sites_spectrum: np.array 3 x s of the count of s segregating sites in each state.
+    """
+
+    start_time = time.time()
+    
+    if block_parquet_path is not None and os.path.exists(block_parquet_path):
+        print(f"{time.time() - start_time}s: Reading blocks from parquet at {block_parquet_path}...")
+    else:
+        print("Processing GFF3 annotation to blocks...")
+    blocks = gff3_to_blocks(gff3_path=gff3, blocklen=blocklen, min_block_distance=min_block_distance, parquet_path=block_parquet_path)
+
+    if vcf_npz_path is None:
+        print(f"{time.time() - start_time}s: Processing VCF file to npz storage at {vcf_npz_path}...")
+    else:
+        print(f"{time.time() - start_time}s: Reading callset information from NumPy storage at {vcf_npz_path}...")
+    callset = CallSet(vcf_path=vcf, npz_path=vcf_npz_path)
+
+    print(f"{time.time() - start_time}s: Reading in samples map {samples_map}...")
+    samples = pd.read_csv(samples_map)
+
+    print("{time.time() - start_time}s: Calculating segregating sites spectrum...")
+    segregating_sites_spectrum = blockwise_segregating_sites(blocks=blocks, callset=callset, samples=samples, sampling_probs=sampling_probs)
+
+    print(f"{time.time() - start_time}s: Saving segregating sites spectrum to {segregating_sites_npy_path}")
+    if segregating_sites_npy_path is not None:
+        np.save(file=segregating_sites_npy_path, arr=segregating_sites_spectrum)
+
+
+
+    return segregating_sites_spectrum
