@@ -107,6 +107,14 @@ class CallSet:
 
         self.callset_positions_df["gt_idx"] = self.callset_positions_df.index
 
+def convert_chromosome_names_to_index(callset_chromosomes):
+    chr_names, chr_idxs = np.unique(callset_chromosomes, return_index=True)
+    chrs_correct_order = chr_names[np.argsort(chr_idxs)]
+    chrs_idxs = range(len(chrs_correct_order))
+    index_dict = dict(zip(chrs_correct_order, chrs_idxs))
+    return np.vectorize(index_dict.get)(callset_chromosomes)
+
+
 def block_genotype_array(callset, chrom, start, end):
     """Genotype array for block."""
     snps_idxs = np.where((callset.chromosomes == chrom) & (callset.pos >= start) & (callset.pos <= end))

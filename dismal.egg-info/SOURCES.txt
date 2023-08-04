@@ -6,6 +6,7 @@ dismal/cli.py
 dismal/demography.py
 dismal/generator_matrices.py
 dismal/generator_matrices_ext.py
+dismal/infer (sce-bio-c06695's conflicted copy 2023-08-04).py
 dismal/infer.py
 dismal/inference.py
 dismal/likelihood.py
