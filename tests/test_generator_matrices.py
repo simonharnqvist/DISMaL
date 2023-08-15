@@ -1,4 +1,4 @@
-from dismal.generator_matrices import GeneratorMatrix
+from dismal.markov_matrices import GeneratorMatrix
 import numpy as np
 import itertools
 from scipy import linalg

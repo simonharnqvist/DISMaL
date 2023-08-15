@@ -4,16 +4,16 @@ dismal/__init__.py
 dismal/blocking.py
 dismal/cli.py
 dismal/demography.py
-dismal/generator_matrices.py
+dismal/demography_models_old.py
 dismal/generator_matrices_ext.py
-dismal/infer (sce-bio-c06695's conflicted copy 2023-08-04).py
 dismal/infer.py
 dismal/inference.py
 dismal/likelihood.py
 dismal/likelihood_matrix.py
+dismal/markov_matrices.py
 dismal/metrics.py
 dismal/model_fitting.py
-dismal/popgen.py
+dismal/popgen_stats.py
 dismal/preprocess.py
 dismal/s_matrix.py
 dismal/simulate.py
