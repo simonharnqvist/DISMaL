@@ -1,73 +1,60 @@
 import numpy as np
-import math
+from dismal.demography import Epoch
 from dismal.likelihood_matrix import LikelihoodMatrix
-from dismal.utils import expect_states1_2, expect_state_3
 
-one_by_ten_S = np.array([
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-])
+def test_two_stage_ll_matrix_no_mig():
+    params = [1,1,1,1,0,0]
+    S = np.ones(shape=(3, 10))
+    epochs = [
+        Epoch(id=0, allow_migration=False),
+        Epoch(id=1, allow_migration=True)
+    ]
 
+    lm = LikelihoodMatrix(params, S, epochs).matrix
+    correct_lm = np.array([[0.69314718, 1.38629436, 2.07944154, 2.77258872, 3.4657359,
+        4.15888308, 4.85203026, 5.54517744, 6.23832463, 6.93147181],
+       [0.69314718, 1.38629436, 2.07944154, 2.77258872, 3.4657359 ,
+        4.15888308, 4.85203026, 5.54517744, 6.23832463, 6.93147181],
+       [1.69314718, 1.28768207, 1.47000363, 1.92676203, 2.51982575,
+        3.1755854 , 3.85657438, 4.54627477, 5.2385621 , 5.9315183 ]])
 
-class TestLikelihoodMatrix:
+    np.testing.assert_array_almost_equal(lm, correct_lm)
 
-    def test_alpha_matrix(self):
-        """Check against hardcoded alpha matrix"""
-        pass
+def test_three_stage_ll_matrix_no_mig():
+    epochs = [Epoch(id=0, allow_migration=False),
+              Epoch(id=1, allow_migration=True),
+              Epoch(id=2, allow_migration=True)]
 
-    def test_beta_matrix(self):
-        pass
+    S = np.ones(shape=(3, 10))
+    params=[1,1,1,1,1,1,1,0,0,0,0]
 
-    def test_gamma_matrix(self):
-        pass
+    lm = LikelihoodMatrix(params=params, S=S, epoch_objects=epochs).matrix
+    correct_lm = np.array([[0.78257772, 1.68287544, 2.63760526, 3.55304993, 4.37912461,
+        5.13081962, 5.8442701 , 6.54329475, 7.23791671, 7.93139191],
+       [0.78257772, 1.68287544, 2.63760526, 3.55304993, 4.37912461,
+        5.13081962, 5.8442701 , 6.54329475, 7.23791671, 7.93139191],
+       [1.69314718, 1.28768207, 1.47000363, 1.92676203, 2.51982575,
+        3.1755854 , 3.85657438, 4.54627477, 5.2385621 , 5.9315183 ]])
+    
+    np.testing.assert_array_almost_equal(lm, correct_lm)
 
-    def test_two_stage_model_conforms_to_theory1(self):
+def test_three_stage_ll_matrix_with_mig():
+    epochs = [Epoch(id=0, allow_migration=False),
+              Epoch(id=1, allow_migration=True),
+              Epoch(id=2, allow_migration=True)]
 
-        theoretical_lm = np.array([
-            [expect_states1_2(i, 1) for i in range(0, 10)],
-            [expect_states1_2(i, 1) for i in range(0, 10)],
-            [expect_state_3(i, 1, 2, 1) for i in range(0, 10)]])
+    S = np.ones(shape=(3, 10))
+    params=[1,1,1,1,1,1,1,0.5,0.5,0.5,0.5]
 
-        calculated_lm = LikelihoodMatrix(
-            {"theta0": 1, "theta1": 1, "theta2": 1, "t0": 2}, S=one_by_ten_S)
+    lm = LikelihoodMatrix(params=params, S=S, epoch_objects=epochs).matrix
+    correct_lm = np.array([[0.84242651, 1.60213032, 2.31050187, 3.00141071, 3.69062159,
+        4.38159278, 5.07389379, 5.76677652, 6.45985363, 7.15298459],
+       [0.84242651, 1.60213032, 2.31050187, 3.00141071, 3.69062159,
+        4.38159278, 5.07389379, 5.76677652, 6.45985363, 7.15298459],
+       [1.61515115, 1.48896043, 1.78984599, 2.29930387, 2.91485817,
+        3.57928333, 4.26319223, 4.95374699, 5.64625299, 6.33925875]])
+    
+    np.testing.assert_array_almost_equal(lm, correct_lm)
 
-        np.testing.assert_allclose(theoretical_lm[0], calculated_lm[0])
-        np.testing.assert_allclose(theoretical_lm[1], calculated_lm[1])
-        np.testing.assert_allclose(theoretical_lm[2], calculated_lm[2])
-
-    def test_three_stage_model_conforms_to_theory1(self):
-
-        theoretical_lm = np.array([
-            [expect_states1_2(i, 1) for i in range(0, 10)],
-            [expect_states1_2(i, 1) for i in range(0, 10)],
-            [expect_state_3(i, 1, 2, 1) for i in range(0, 10)]])
-
-        calculated_lm = LikelihoodMatrix(
-            {"theta0": 1, "theta1": 1, "theta2": 1,
-             "theta1_prime": 1, "theta2_prime": 1, "t1": 1, "v": 1}, S=one_by_ten_S)
-
-        np.testing.assert_allclose(theoretical_lm[0], calculated_lm[0])
-        np.testing.assert_allclose(theoretical_lm[1], calculated_lm[1])
-        np.testing.assert_allclose(theoretical_lm[2], calculated_lm[2])
-
-    # def test_three_stage_model_conforms_to_theory2(self):
-    """Is the theory right here?"""
-
-    #     theoretical_lm = np.array([
-    #         [expect_states1_2(i, 5) for i in range(0, 10)],
-    #         [expect_states1_2(i, 5) for i in range(0, 10)],
-    #         [expect_state_3(k=i, theta=5, tau=10, a=5) for i in range(0, 10)]])
-
-    #     params = {'theta0': 5,
-    #               'theta1': 5,
-    #               'theta2': 5,
-    #               'theta1_prime': 5,
-    #               'theta2_prime': 5,
-    #               't1': 5,
-    #               'v': 5}
-    #     calculated_lm = LikelihoodMatrix(params, one_by_ten_S)
-
-    #     np.testing.assert_allclose(theoretical_lm[0], calculated_lm[0])
-    #     np.testing.assert_allclose(theoretical_lm[1], calculated_lm[1])
-    #     np.testing.assert_allclose(theoretical_lm[2], calculated_lm[2])
+    
+    

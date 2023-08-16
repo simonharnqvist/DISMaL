@@ -34,7 +34,7 @@ class Epoch:
 
     def n_migration_rates(self):
 
-        if self.allow_migration is None:
+        if self.allow_migration is False:
             return 0
         elif self.symmetric_migration is True:
             return 1

@@ -78,7 +78,7 @@ class DivergenceModel:
         self.tau_params = [f"tau_{t}" for t in range(1, self.n_epochs)]
 
         self.n_theta_params = len(self.population_ids)
-        self.n_tau_params = self.n_epochs
+        self.n_tau_params = self.n_epochs-1
         self.n_M_params = sum([epoch.n_M_params for epoch in self.epochs])
 
     def __str__(self):
