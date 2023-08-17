@@ -14,13 +14,14 @@ class Population:
 
 class Epoch:
 
-    def __init__(self, id, allow_migration, symmetric_migration=True, migration_direction=None,
+    def __init__(self, id, allow_migration, symmetric_migration=False, migration_direction=None,
                   start_time=None, end_time=None, populations=None):
         assert isinstance(id, int)
         
         self.id = id
 
-        assert (isinstance(allow_migration, list) and isinstance(allow_migration[0], bool)) or isinstance(allow_migration, bool), "migration argument must be bool or list of bools"
+        assert (isinstance(allow_migration, list) and isinstance(allow_migration[0], bool)) \
+            or isinstance(allow_migration, bool), "migration argument must be bool or list of bools"
         self.allow_migration = allow_migration
         self.symmetric_migration = symmetric_migration
         self.migration_direction = migration_direction

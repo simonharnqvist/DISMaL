@@ -23,7 +23,7 @@ class DivergenceModel:
         self.epochs = []
         self.populations = []
 
-        self.n_populations = self.n_epochs*2 + 1
+        self.n_populations = (self.n_epochs-1)*2 + 1
         if population_names is None:
             self.population_names = [None] * self.n_populations
     
