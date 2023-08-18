@@ -25,7 +25,6 @@ dismal.egg-info/dependency_links.txt
 dismal.egg-info/top_level.txt
 tests/test_generator_matrices.py
 tests/test_infer.py
-tests/test_inference.py
 tests/test_likelihood.py
 tests/test_likelihood_matrix.py
 tests/test_preprocess.py

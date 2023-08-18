@@ -109,14 +109,16 @@ class LikelihoodMatrix:
 
     def three_stage_ll_matrix(self):
         return -np.log([np.array(
-            self.diagonal_matrix_mult(self.Qs[0].eigenvectors, self.Qs[0].eigenvectors_inv)[i, 0:3]
-            @ self.eigenvalue_matrix(eigenvals=self.Qs[0].eigenvalues,
-                                                          start_time=0, end_time=self.taus[1])
-            + self.Ps[0][i, 0:3]
-            @ self.diagonal_matrix_mult(self.Qs[1].eigenvectors, self.Qs[1].eigenvectors_inv)[0:3, 0:3]
-            @ self.eigenvalue_matrix(eigenvals=self.Qs[1].eigenvalues,
-                                                          start_time=self.taus[1], end_time=self.taus[0])
-            + (1 - (self.Ps[0].matrix@self.Ps[1].matrix)[i, 3])
-            * self.eigenvalue_matrix(eigenvals=[-1/self.thetas[0]],
-                                                          start_time=self.taus[0], end_time=None))
+            self.eigenvalue_matrix(eigenvals=self.Qs[0].eigenvalues, start_time=0, end_time=self.taus[1])
+            + (self.Ps[0][i,0:3] 
+               @ self.diagonal_matrix_mult(self.Qs[1].eigenvectors, self.Qs[1].eigenvectors_inv)[0:3, 0:3] 
+               @ self.eigenvalue_matrix(eigenvals=self.Qs[1].eigenvalues, start_time=self.taus[1], end_time=self.taus[0]))
+            + (1-(self.Ps[0].matrix@self.Ps[1].matrix)[i,3]) )
+            * self.eigenvalue_matrix([-1/self.thetas[0]], start_time=self.taus[0], end_time=None)
                         for i in [0, 1, 2]])
+
+
+    def log_likelihood_array(self, state_idx):
+
+        if state_idx == 0 or state_idx == 1:
+            self.eigenvalue_matrix(eigenvals=self.Qs[state_idx].eigenvalues, start_time=self.taus[])

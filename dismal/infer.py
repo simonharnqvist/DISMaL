@@ -1,8 +1,9 @@
 import numpy as np
-from dismal.likelihood_matrix import LikelihoodMatrix
 from dismal import demography, popgen_stats
+from dismal.markov_matrices import TransitionRateMatrix, StochasticMatrix
 from dismal.demography import Epoch, Population
 import scipy
+from scipy.stats import poisson
 import pandas as pd
 
 class DivergenceModel:
@@ -137,10 +138,8 @@ class DivergenceModel:
 
     def fit(self, S, blocklen=None, initial_values=None, lower_bounds=None, verbose=False):
         """UNTESTED"""
-        assert isinstance(S, np.ndarray), "S must be np.ndarray"
-        assert S.shape[0] == 3, f"S has wrong shape {S.shape}; there should be 3 sampling states"
-        assert S.shape[1] > 0, "S contains no data"
-
+        assert isinstance(S, list), "S must be list of np arrays"
+        assert len(S) == 3
         initial_vals = self.get_initial_values(S, initial_values, blocklen)
         bounds = self.get_bounds(S, lower_bounds)
 
@@ -149,17 +148,50 @@ class DivergenceModel:
     def fit_resampled_ivs(self):
         raise NotImplementedError("Fitting with sampled IVs not yet implemented.")
     
-
     @staticmethod
-    def composite_likelihood(params, S, epochs, verbose=False):
-        """UNTESTED"""
-        likelihood_matrix = LikelihoodMatrix(params, S, epochs)
-        negll = np.sum(S * likelihood_matrix.matrix)
+    def eigenvalue_transform(lmbdas, s, start_time, end_time):
+        return np.array([np.array((lmbdas/(lmbdas+1))*(1/(lmbdas+1)))[i] * (s*(poisson.cdf(s, start_time)-poisson.cdf(s, end_time))) for i in range(len(lmbdas))])
+
+    
+    @staticmethod
+    def log_likelihood_3_epoch(self, params, S, verbose=False):
+
+        Q1 = TransitionRateMatrix(thetas=params[0:2], Ms=params[6:self.epoch[0].n_M_params])
+        Q2 = TransitionRateMatrix(thetas=params[2:4], Ms=params[6+self.epoch[0].n_M_params:])
+
+        tau1 = params[5]
+        v = params[6]
+        tau0 = params[5] + params[6]
+
+        GG = -Q1.eigenvectors_inv @ np.diag(Q1.eigenvectors[:,3])
+        CC = -Q2.eigenvectors_inv @ np.diag(Q2.eigenvectors[:,3])
+
+        P1 = StochasticMatrix(Q1.eigenvectors, Q1.eigenvectors_inv, Q1.eigenvalues, t=tau1)
+        P2 = StochasticMatrix(Q2.eigenvectors, Q2.eigenvectors_inv, Q2.eigenvalues, t=v)
+
+        eigvals = [-Q1.eigenvalues[0:3], -Q2.eigenvalues[0:3], 1/self.params[0]]
+        times = [0, tau1, tau0, None]
+
+        log_likelihoods = np.zeros(shape=3)
+        
+        for state_idx in range(3):
+            
+            s_transformed_eigvals = [self.eigenvalue_transform(lmbdas=eigvals[i], s=S[state_idx], start_time=times[i], end_time=times[i+1])
+                                 for i in range(3)]
+
+            state_ll = np.sum(np.log(GG[state_idx, 0:3] @ s_transformed_eigvals[0] 
+                                     + P1[state_idx, 0:3] @ CC[0:3, 0:3] @ s_transformed_eigvals[1]
+                                     + (1 - (P1.matrix @ P2.matrix)[state_idx, 3]) * s_transformed_eigvals[2]))
+
+            log_likelihoods[state_idx] = state_ll
+        
+        log_l = np.sum(log_likelihoods)
 
         if verbose:
-            print(params, negll)
+            print(params, log_l)
 
-        return negll
+
+        return log_l
 
     @staticmethod
     def pretty_output(inferred_params, negll, aic):
@@ -174,7 +206,7 @@ class DivergenceModel:
         """UNTESTED"""
         opt_algos = ["L-BFGS-B", "Nelder-Mead", "Powell"]
         for algo_idx, algo in enumerate(opt_algos):
-            optimised = scipy.optimize.minimize(self.composite_likelihood,
+            optimised = scipy.optimize.minimize(self.log_likelihood_3_epoch,
                                                 x0=initial_values,
                                                 method=algo,
                                                 args=(S, self.epochs, verbose),
