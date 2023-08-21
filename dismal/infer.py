@@ -80,7 +80,7 @@ class DivergenceModel:
 
         self.n_theta_params = len(self.population_ids)
         self.n_tau_params = self.n_epochs-1
-        self.n_M_params = sum([epoch.n_M_params for epoch in self.epochs])
+        self.n_m_params = sum([epoch.n_m_params for epoch in self.epochs])
 
     def __str__(self):
         return f"""
@@ -101,44 +101,44 @@ class DivergenceModel:
         if initial_values is not None:
             theta_iv = initial_values[0]
             tau_iv = initial_values[1]
-            M_iv = initial_values[2]
+            m_iv = initial_values[2]
         else:
             theta_iv = popgen_stats.estimate_pi(S)
             assert isinstance(blocklen, int), "blocklen (int) must be provided if initial values are to be estimated from data" 
             tau_iv = popgen_stats.estimate_dxy(S, blocklen)
-            M_iv = 0
+            m_iv = 0
         
         thetas_iv = [theta_iv] * self.n_theta_params
         taus_iv = [tau_iv] * self.n_tau_params
-        Ms_iv = [M_iv] * self.n_M_params
-        initial_values = thetas_iv + taus_iv + Ms_iv
+        ms_iv = [m_iv] * self.n_m_params
+        initial_values = thetas_iv + taus_iv + ms_iv
 
         return initial_values
 
 
     def get_bounds(self, S, lower_bounds=None):
         if lower_bounds is not None:
-            assert len(lower_bounds) == 3, "Lower bounds array should have 3 values: [theta, tau, M]"
+            assert len(lower_bounds) == 3, "Lower bounds array should have 3 values: [theta, tau, m]"
 
         if lower_bounds is not None:
             theta_lb = lower_bounds[0]
             tau_lb = lower_bounds[1]
-            M_lb = lower_bounds[2]
+            m_lb = lower_bounds[2]
         else:
             theta_lb = 0.01
             tau_lb = 0.01
-            M_lb = 0
+            m_lb = 0
 
         theta_bounds = [(theta_lb, None)] * self.n_theta_params
         tau_bounds = [(tau_lb, None)] * self.n_tau_params
-        migr_bounds = [(M_lb, None)] * self.n_M_params
+        migr_bounds = [(m_lb, None)] * self.n_m_params
         bounds = theta_bounds + tau_bounds + migr_bounds
 
         return bounds
 
     def fit(self, S, blocklen=None, initial_values=None, lower_bounds=None, verbose=False):
         """UNTESTED"""
-        assert isinstance(S, list), "S must be list of np arrays"
+        #assert isinstance(S, list), "S must be list of np arrays"
         assert len(S) == 3
         initial_vals = self.get_initial_values(S, initial_values, blocklen)
         bounds = self.get_bounds(S, lower_bounds)
@@ -150,45 +150,76 @@ class DivergenceModel:
     
     @staticmethod
     def eigenvalue_transform(lmbdas, s, start_time, end_time):
-        return np.array([np.array((lmbdas/(lmbdas+1))*(1/(lmbdas+1)))[i] * (s*(poisson.cdf(s, start_time)-poisson.cdf(s, end_time))) for i in range(len(lmbdas))])
+        assert isinstance(lmbdas, np.ndarray), "lambdas must be np array"
+
+        A = np.zeros(shape=(lmbdas.shape[0], s.shape[0]))
+
+        for lmbda_idx, lmbda in enumerate(lmbdas):
+            for sval, _ in enumerate(s):
+                pois_start = poisson.cdf(sval, start_time*(lmbda+1))
+                if end_time is not None:
+                    pois_end = poisson.cdf(sval, end_time*(lmbda+1))
+                else:
+                    pois_end = 0
+
+                A[lmbda_idx, sval] = ((lmbda/(lmbda+1) * (1/(lmbda+1))) 
+                                          ** (sval * np.exp(lmbda*start_time)) 
+                                              * (pois_start - pois_end))
+    
+        return A
+    
+
+    def log_likelihood(self, params, S, verbose=False):
+        """Log likelihood evaluation for parameter set given data S=[s1, s2, s3...]"""
+
+        if np.isnan(params).any():
+            return np.nan
+        
+        
+
+
 
     
-    @staticmethod
     def log_likelihood_3_epoch(self, params, S, verbose=False):
 
-        Q1 = TransitionRateMatrix(thetas=params[0:2], Ms=params[6:self.epoch[0].n_M_params])
-        Q2 = TransitionRateMatrix(thetas=params[2:4], Ms=params[6+self.epoch[0].n_M_params:])
+        if np.isnan(params).any():
+            return np.nan
 
+        thetas = params[0:4]
         tau1 = params[5]
         v = params[6]
         tau0 = params[5] + params[6]
+        ms_iter = iter(params[7:])
 
-        GG = -Q1.eigenvectors_inv @ np.diag(Q1.eigenvectors[:,3])
-        CC = -Q2.eigenvectors_inv @ np.diag(Q2.eigenvectors[:,3])
+        Q1 = TransitionRateMatrix(thetas=thetas[0:2], ms=[next(ms_iter) for _ in range(self.epochs[1].n_m_params)])
+        Q2 = TransitionRateMatrix(thetas=thetas[2:4], ms=[next(ms_iter) for _ in range(self.epochs[2].n_m_params)])
+
+        GG = -Q1.eigenvectors_inv @ np.diag(Q1.eigenvectors[:,-1])
+        CC = -Q2.eigenvectors_inv @ np.diag(Q2.eigenvectors[:,-1])
 
         P1 = StochasticMatrix(Q1.eigenvectors, Q1.eigenvectors_inv, Q1.eigenvalues, t=tau1)
         P2 = StochasticMatrix(Q2.eigenvectors, Q2.eigenvectors_inv, Q2.eigenvalues, t=v)
 
-        eigvals = [-Q1.eigenvalues[0:3], -Q2.eigenvalues[0:3], 1/self.params[0]]
+        eigvals = [-Q1.eigenvalues[0:3], -Q2.eigenvalues[0:3], np.array([-1/params[0]])]
         times = [0, tau1, tau0, None]
 
         log_likelihoods = np.zeros(shape=3)
         
         for state_idx in range(3):
             
-            s_transformed_eigvals = [self.eigenvalue_transform(lmbdas=eigvals[i], s=S[state_idx], start_time=times[i], end_time=times[i+1])
+            A, B, C = [self.eigenvalue_transform(lmbdas=eigvals[i], s=S[state_idx], start_time=times[i], end_time=times[i+1])
                                  for i in range(3)]
-
-            state_ll = np.sum(np.log(GG[state_idx, 0:3] @ s_transformed_eigvals[0] 
-                                     + P1[state_idx, 0:3] @ CC[0:3, 0:3] @ s_transformed_eigvals[1]
-                                     + (1 - (P1.matrix @ P2.matrix)[state_idx, 3]) * s_transformed_eigvals[2]))
-
+            
+            state_ll = np.sum(np.log(np.transpose(GG[state_idx, 0:3]) @ A
+                                     + P1[state_idx, 0:3] @ np.transpose(CC[0:3, 0:3]) @ B
+                                     + (1 - ((P1.matrix @ P2.matrix)[state_idx, -1])) * C))
             log_likelihoods[state_idx] = state_ll
+            print(state_ll)
         
-        log_l = np.sum(log_likelihoods)
+        log_l = -np.sum(log_likelihoods)
 
         if verbose:
-            print(params, log_l)
+            print(params, log_l, Q1.matrix, Q2.matrix)
 
 
         return log_l
@@ -209,7 +240,7 @@ class DivergenceModel:
             optimised = scipy.optimize.minimize(self.log_likelihood_3_epoch,
                                                 x0=initial_values,
                                                 method=algo,
-                                                args=(S, self.epochs, verbose),
+                                                args=(S, verbose),
                                                 # options={
                                                 #     "ftol": ftol,
                                                 #     "eps": eps,

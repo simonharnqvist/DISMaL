@@ -4,19 +4,19 @@ import math
 
 class TransitionRateMatrix:
 
-    def __init__(self, thetas, Ms, symmetric_migration=False):
+    def __init__(self, thetas, ms, symmetric_migration=False):
         """Create a generator matrix that describes that transition rates between states in the stochastic model."""
 
         self.pop_size1 = thetas[0]
         self.pop_size2 = thetas[1]
-        self.mig_rate1 = Ms[0]/thetas[0]
+        self.mig_rate1 = ms[0]
 
         if symmetric_migration is True:
             self.mig_rate2 = self.mig_rate1
-        elif len(Ms) == 1:
+        elif len(ms) == 1:
             self.mig_rate2 = 0
         else:
-            self.mig_rate2 = Ms[1]/thetas[1]
+            self.mig_rate2 = ms[1]
 
         self.matrix = self.generate()
         self.eigenvectors, self.eigenvalues = self.eigen()

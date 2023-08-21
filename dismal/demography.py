@@ -4,13 +4,14 @@ import itertools
 
 class Population:
 
-    def __init__(self, id, epoch_id, population_name=None):
+    def __init__(self, id, epoch_id, population_name=None, s=None):
         assert isinstance(id, int)
         assert isinstance(epoch_id, int)
 
         self.id = id
         self.population_name = population_name
         self.epoch_id = epoch_id
+        self.s = s
 
 class Epoch:
 
@@ -31,7 +32,7 @@ class Epoch:
 
         self.populations = populations
         
-        self.n_M_params = self.n_migration_rates()
+        self.n_m_params = self.n_migration_rates()
 
     def n_migration_rates(self):
 
@@ -43,3 +44,4 @@ class Epoch:
             return 1
         else:
             return 2
+        
