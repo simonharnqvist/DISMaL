@@ -1,0 +1,12 @@
+README.md
+setup.py
+dismal/demography.py
+dismal/divergencemodel.py
+dismal/likelihood.py
+dismal/markov_matrices.py
+dismal/multimodel.py
+dismal/popgen_stats.py
+dismal.egg-info/PKG-INFO
+dismal.egg-info/SOURCES.txt
+dismal.egg-info/dependency_links.txt
+dismal.egg-info/top_level.txt
