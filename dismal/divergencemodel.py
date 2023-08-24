@@ -5,13 +5,22 @@ import scipy
 
 class DivergenceModel:
 
-    def __init__(self):
-        self.model = None
+    def __init__(self, model_ref=None):
+        self.model_ref = model_ref
         self.epochs = []
 
         self.n_theta_params = 0
         self.n_t_params = -1  # 2 epochs = 1 t, 3 epochs = 2 ts
         self.n_m_params = 0
+
+        self.inferred_thetas = None
+        self.inferred_taus = None
+        self.inferred_ms = None
+        self.n_params = None
+        self.aic = None
+        self.negll = None
+        self.res = None
+        self.inferred_params = None
 
     def get_parameter_idxs(self):
         theta_param_idxs = list(range(0, self.n_theta_params))
@@ -21,14 +30,12 @@ class DivergenceModel:
         return (theta_param_idxs, t_param_idxs, m_param_idxs)
 
     def add_epoch(self,
-                  index,
                   deme_ids,
                   migration,
                   asymmetric_migration=True,
                   migration_direction=None):
         
         epoch = Epoch(
-            index=index,
             deme_ids=deme_ids,
             migration=migration,
             asymmetric_migration=asymmetric_migration,
@@ -92,13 +99,23 @@ class DivergenceModel:
 
         for epoch in self.epochs[:-1]:
             n_thetas_epoch = len(epoch.deme_ids)
-            epoch_thetas=[next(thetas_iter) for _ in range(n_thetas_epoch)]
+            epoch_thetas = [next(thetas_iter) for _ in range(n_thetas_epoch)]
 
-            n_ms_epoch = epoch.n_m_params
-            if n_ms_epoch > 0:
-                epoch_ms = [next(ms_iter) for _ in range(n_ms_epoch)]
+            if epoch.migration is False:
+                epoch_ms = [0, 0]
+            elif epoch.asymmetric_migration is False:
+                epoch_ms = [next(ms_iter)]
+            elif epoch.migration_direction is not None:
+                assert epoch.migration_direction[0] in epoch.deme_ids and epoch.migration_direction[1] in epoch.deme_ids
+
+                if epoch.migration_direction[0] == epoch.deme_ids[0]:
+                    epoch_ms = [next(ms_iter), 0]
+                elif epoch.migration_direction[0] == epoch.deme_ids[1]:
+                    epoch_ms = [0, next(ms_iter)]
+                else:
+                    raise ValueError(f"Migration direction {epoch.migration_direction} not compatible with demes in epoch: {epoch.deme_ids}")
             else:
-                epoch_ms = []
+                epoch_ms = [next(ms_iter), next(ms_iter)]
 
             Q = TransitionRateMatrix(thetas=epoch_thetas, 
                                      ms=epoch_ms,
@@ -121,6 +138,9 @@ class DivergenceModel:
         return logl
     
     def minimise_neg_log_likelihood(self, s1, s2, s3, initial_values, bounds, verbose=False):
+
+        assert len(initial_values) == self.n_theta_params + self.n_t_params + self.n_m_params
+
         opt_algos = ["L-BFGS-B", "Nelder-Mead", "Powell"]
         for algo_idx, algo in enumerate(opt_algos):
             optimised = scipy.optimize.minimize(self._log_likelihood_from_params,
@@ -137,13 +157,16 @@ class DivergenceModel:
                     f"Optimisers {opt_algos} all failed to maximise the likelihood")
 
         assert optimised.success, f"Optimisers {opt_algos} all failed to maximise the likelihood"
-        inferred_params = optimised.x
-        n_params = len(initial_values)  # need to combine these back to make human readable output
-        negll = optimised.fun
-        aic = 2*n_params + 2*negll
-
-        return inferred_params, negll, n_params, aic
-
+        
+        self.inferred_params = optimised.x
+        self.negll = optimised.fun
+        theta_idxs, tau_idxs, m_idxs = self.get_parameter_idxs()
+        self.n_params = self.n_theta_params + self.n_t_params + self.n_m_params
+        self.inferred_thetas = self.inferred_params[theta_idxs]
+        self.inferred_taus = self.inferred_params[tau_idxs]
+        self.inferred_ms = self.inferred_params[m_idxs]
+        self.aic = 2*self.n_params + 2*self.negll
+        self.res = self.results_dict()
 
     def fit(self,
             s1, s2, s3, blocklen=None,
@@ -157,6 +180,56 @@ class DivergenceModel:
             bounds = self.get_bounds()
 
         return self.minimise_neg_log_likelihood(s1, s2, s3, initial_values, bounds, verbose=False)
+    
+    def results_dict(self):
+        return {
+            "model_ref": self.model_ref,
+            "n_epochs": len(self.epochs),
+            "demes": [[i for i in epoch.deme_ids] for epoch in self.epochs],
+            "thetas": self.inferred_thetas,
+            "taus": self.inferred_taus,
+            "mig_rates": self.inferred_ms,
+            "n_params": self.n_params,
+            "neg_log_likelihood": self.negll,
+            "aic": self.aic
+        }
+    
+    @staticmethod
+    def from_dict_spec(model_spec):
+        epoch_idxs = range(model_spec["epochs"]-1)
+        deme_ids = model_spec["deme_ids"]
+
+        if "model_ref" in model_spec.keys():
+            model_ref = model_spec["model_ref"]
+        else:
+            model_ref = None
+
+        mod = DivergenceModel(model_ref=model_ref)
+
+        for epoch_idx in epoch_idxs:
+            allow_migration_epoch = model_spec["migration"][epoch_idx]
+            assert isinstance(allow_migration_epoch, bool)
+
+            if "asym_migration" in model_spec.keys():
+                allow_asymmetric_migration_epoch = model_spec["asym_migration"][epoch_idx]
+            else:
+                allow_asymmetric_migration_epoch = False
+
+            if "migration_direction" in model_spec.keys():
+                migration_direction_epoch = model_spec["migration_direction"][epoch_idx]
+                assert migration_direction_epoch[0] in deme_ids \
+                    and migration_direction_epoch[1] in deme_ids
+            else:
+                migration_direction_epoch = None
+                
+            mod.add_epoch(deme_ids = deme_ids,
+                            migration = allow_migration_epoch,
+                            asymmetric_migration = allow_asymmetric_migration_epoch,
+                            migration_direction = migration_direction_epoch)
+                
+        mod.add_epoch(deme_ids=["ancestral"], migration=False)
+
+        return mod
 
         
 

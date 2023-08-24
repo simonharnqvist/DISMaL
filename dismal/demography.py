@@ -1,14 +1,11 @@
 class Epoch:
 
     def __init__(self, 
-                 index,
                  deme_ids,
                  migration,
                  asymmetric_migration=True,
                  migration_direction=None):
-        assert isinstance(index, int)
-        
-        self.index = index
+
         self.deme_ids = deme_ids
 
         assert (isinstance(migration, list) and isinstance(migration[0], bool)) \
