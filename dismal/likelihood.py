@@ -31,7 +31,6 @@ def log_likelihood(Qs, ts, s1, s2, s3):
     """
     ts = epoch duration vector
     """
-
     Ps = [StochasticMatrix(Q, t=ts[idx]) for idx, Q in enumerate(Qs[:-1])]
     QQs = [-Q.eigenvectors_inv @ np.diag(Q.eigenvectors[:, -1]) for Q in Qs[:-1]]
     Q_eigvals = [np.array(-Q.eigenvalues[0:3]) for Q in Qs[:-1]]

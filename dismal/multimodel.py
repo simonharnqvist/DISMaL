@@ -10,7 +10,7 @@ class MultiModel:
 
         self.deme1_id = deme1_id
         self.deme2_id = deme2_id
-        self.deme_ids = [deme1_id, deme2_id]
+        self.deme_ids = [(deme1_id, deme2_id), (deme1_id, deme2_id), ("ancestral", )]
         self.n_demes = 2   # for future extension
         self.allow_asymmetric_migration = allow_asymmetric_migration
         self.model_space = self.make_model_space()

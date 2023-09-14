@@ -53,7 +53,7 @@ def test_log_likelihood_from_params():
 
 def test_from_dict_spec():
     dict_spec = {"epochs": 3, 
-                 "deme_ids": ["pop1", "pop2"],
+                 "deme_ids": [("pop1", "pop2"), ("pop1", "pop2"), ("ancestral", )],
                               "migration": (True, True, False), 
                               "asym_migration": (True, True, False), 
                               "migration_direction": (("pop1", "pop2"), ("pop1", "pop2"))}
@@ -72,3 +72,6 @@ def test_from_dict_spec():
     assert mod.epochs[2].asymmetric_migration is False
     assert mod.epochs[0].migration_direction == ("pop1", "pop2")
     assert mod.epochs[1].migration_direction == ("pop1", "pop2")
+    assert mod.epochs[0].deme_ids == ("pop1", "pop2")
+    assert mod.epochs[1].deme_ids == ("pop1", "pop2")
+    assert mod.epochs[2].deme_ids == ("ancestral", )
