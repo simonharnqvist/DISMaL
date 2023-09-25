@@ -44,6 +44,9 @@ def log_likelihood(Qs, ts, s1, s2, s3):
     """Log-likelihood of parameter set given dataset."""
     S = [s1, s2, s3]
     state_log_likelihoods = np.zeros(3)
+
+    assert len(ts) == 2 # only 3 epochs implemented, must have two split times
+    ts = list(ts)
     
     epoch_dur = _epoch_durations(ts)
     start_times = [0] + ts

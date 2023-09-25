@@ -54,7 +54,7 @@ def test_log_likelihood():
     mod.add_epoch(deme_ids=["pop1", "pop2"], migration=False)
     mod.add_epoch(deme_ids=["pop1", "pop2"], migration=False)
     mod.add_epoch(deme_ids=["ancestral"], migration=False)
-    Qs = mod.generate_markov_chain(param_vals=np.array([1,1,1,1,1,1,1,0,0,0,0]))
+    Qs = mod.generate_markov_chain(param_vals=np.array([1,1,1,1,1,2,1,0,0,0,0]))
     logl = log_likelihood(Qs, ts=[1,2], s1 = np.array([i for i in range(10)]), 
                           s2=np.array([i for i in range(10)]), 
                           s3=np.array([i for i in range(10)]))

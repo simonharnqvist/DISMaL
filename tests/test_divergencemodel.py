@@ -22,7 +22,7 @@ def test_generate_markov_chain():
 
     param_vals = np.array([1,1,1,1,1,1,1,0,0,0,0])
     Qs = mod.generate_markov_chain(param_vals)
-    Q = TransitionRateMatrix(thetas=[1,1], ms=[0,0]).matrix
+    Q = TransitionRateMatrix(single_deme=False, thetas=[1,1], ms=[0,0]).matrix
 
     np.testing.assert_almost_equal(Qs[0].matrix, Q)
     np.testing.assert_almost_equal(Qs[1].matrix, Q)
@@ -36,8 +36,8 @@ def test_generate_markov_chain_directional_migration():
     param_vals = np.array([1, 1, 1, 1, 1, 1, 1, 0.5, 0.25])
     Qs = mod.generate_markov_chain(param_vals)
     
-    Q1 = TransitionRateMatrix(thetas=[1,1], ms=[0, 0.5]).matrix
-    Q2 = TransitionRateMatrix(thetas=[1,1], ms=[0.25, 0]).matrix
+    Q1 = TransitionRateMatrix(single_deme=False, thetas=[1,1], ms=[0, 0.5]).matrix
+    Q2 = TransitionRateMatrix(single_deme=False, thetas=[1,1], ms=[0.25, 0]).matrix
 
     np.testing.assert_almost_equal(Qs[0].matrix, Q1)
     np.testing.assert_almost_equal(Qs[1].matrix, Q2)
@@ -47,8 +47,15 @@ def test_log_likelihood_from_params():
     mod.add_epoch(deme_ids=["pop1", "pop2"], migration=True)
     mod.add_epoch(deme_ids=["pop1", "pop2"], migration=True)
     mod.add_epoch(deme_ids=["ancestral"], migration=False)
-    param_vals = np.array([1,1,1,1,1,1,1,0,0,0,0])
-    logll = mod._log_likelihood_from_params(param_vals, s1=np.ones(10), s2=np.ones(10), s3=np.ones(10))
+    param_vals = np.array([1,1,1,1,1,2,1,0,0,0,0])
+
+    r_validated_logll = 103.9362
+
+    logll = mod._log_likelihood_from_params(param_vals, 
+                                            s1=np.array([i for i in range(10)]), 
+                                            s2=np.array([i for i in range(10)]), 
+                                            s3=np.array([i for i in range(10)]))
+    
     assert math.isclose(logll, 103.93615780591482)
 
 def test_from_dict_spec():

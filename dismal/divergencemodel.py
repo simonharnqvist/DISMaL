@@ -145,6 +145,9 @@ class DivergenceModel:
             else:
                 ts = param_vals[self.n_theta_params:-self.n_m_params]
 
+            ts.sort() # sort most recent -> older
+            assert len(ts) == 2
+
             logl = likelihood.log_likelihood(Qs, ts, s1, s2, s3)
 
             if verbose:
