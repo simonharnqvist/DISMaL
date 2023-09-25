@@ -75,3 +75,15 @@ def test_from_dict_spec():
     assert mod.epochs[0].deme_ids == ("pop1", "pop2")
     assert mod.epochs[1].deme_ids == ("pop1", "pop2")
     assert mod.epochs[2].deme_ids == ("ancestral", )
+
+def test_model_fitting():
+    dict_spec = {"epochs": 3, 
+                 "deme_ids": [("pop1", "pop2"), ("pop1", "pop2"), ("ancestral", )],
+                              "migration": (True, True, False), 
+                              "asym_migration": (True, True, False), 
+                              "migration_direction": (("pop1", "pop2"), ("pop1", "pop2"))}
+    mod = DivergenceModel.from_dict_spec(dict_spec)
+    s1, s2, s3 = [np.ones(10)]*3
+    mod.fit(s1, s2, s3, blocklen=500)
+
+    assert isinstance(mod.res, dict)

@@ -1,3 +1,4 @@
+LICENSE
 README.md
 setup.py
 dismal/demography.py
@@ -10,3 +11,8 @@ dismal.egg-info/PKG-INFO
 dismal.egg-info/SOURCES.txt
 dismal.egg-info/dependency_links.txt
 dismal.egg-info/top_level.txt
+tests/test_demography.py
+tests/test_divergencemodel.py
+tests/test_likelihood.py
+tests/test_markov_matrices.py
+tests/test_multimodel.py

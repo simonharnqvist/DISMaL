@@ -4,11 +4,13 @@ import math
 
 class TransitionRateMatrix:
 
-    def __init__(self, thetas, ms, asymmetric_migration=True):
+    def __init__(self, single_deme, thetas, ms, asymmetric_migration=True):
         """Create a generator matrix that describes that transition rates between states in the stochastic model."""
 
         assert 1 <= len(thetas) <= 2
         assert 0 <= len(ms) <= 2
+
+        self.single_deme = single_deme # q3?
 
         self.pop_size1 = thetas[0]
 
@@ -55,6 +57,13 @@ class TransitionRateMatrix:
             return None
         elif any(math.isinf(param) for param in [self.pop_size1, self.pop_size2, self.mig_rate1, self.mig_rate2]):
             return None
+        elif self.single_deme:
+            return np.array([
+                [-(1/self.pop_size1), 0, 0, 1/self.pop_size1],
+                [0, -(1/self.pop_size1), 0, 1/self.pop_size1],
+                [0, 0, - (1/self.pop_size1), 1/self.pop_size1],
+                [0, 0, 0, 0]
+            ])
         else:
             return np.array([
             [-(1/self.pop_size1 + self.mig_rate1), 0, self.mig_rate1, 1/self.pop_size1],

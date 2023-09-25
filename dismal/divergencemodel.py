@@ -19,7 +19,6 @@ class DivergenceModel:
         self.inferred_taus = None
         self.inferred_ms = None
         self.n_params = None
-        self.aic = None
         self.negll = None
         self.res = None
         self.inferred_params = None
@@ -112,13 +111,14 @@ class DivergenceModel:
             else:
                 epoch_ms = [next(ms_iter), next(ms_iter)]
 
-            Q = TransitionRateMatrix(thetas=epoch_thetas, 
+            Q = TransitionRateMatrix(single_deme=False,
+                                     thetas=epoch_thetas, 
                                      ms=epoch_ms,
                                      asymmetric_migration=epoch.asymmetric_migration)
             
             Qs.append(Q)
 
-        Qs.append(TransitionRateMatrix(thetas=[thetas[-1]], ms=[0])) # 'ancestral epoch' NB wrong - should be changed later for clarity but no impact
+        Qs.append(TransitionRateMatrix(single_deme=True, thetas=[thetas[-1]], ms=[0]))
 
         return Qs
     
@@ -134,7 +134,8 @@ class DivergenceModel:
         
         valid_params = self._validate_params(param_vals)
         if not valid_params:
-            print(f"Warning: invalid parameters {param_vals}")
+            if verbose:
+                print(f"Warning: invalid parameters {param_vals}")
             return np.nan
         else:
             Qs = self.generate_markov_chain(param_vals)
@@ -177,7 +178,8 @@ class DivergenceModel:
         self.n_params = self.n_theta_params + self.n_t_params + self.n_m_params
         self.inferred_thetas = self.inferred_params[0:self.n_theta_params]
         self.inferred_taus = self.inferred_params[self.n_theta_params:-self.n_m_params]
-        self.inferred_ms = self.inferred_params[-self.n_m_params:]
+        if self.n_m_params > 0:
+            self.inferred_ms = self.inferred_params[-self.n_m_params:]
         self.aic = 2*self.n_params + 2*self.negll
         self.res = self.results_dict()
 
@@ -204,7 +206,6 @@ class DivergenceModel:
             "mig_rates": self.inferred_ms,
             "n_params": self.n_params,
             "neg_log_likelihood": self.negll,
-            "aic": self.aic
         }
     
     @staticmethod
