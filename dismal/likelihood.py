@@ -18,7 +18,6 @@ def _epoch_durations(ts):
 #         return np.transpose(np.array([poisson.cdf(s_val, t*(eigenvalues+1)) for s_val in s]))
     
 def _poisson_cdf(s, t, eigenvalues):
-    """Consider Cythonisation if necessary"""
     if t is None:
         return np.zeros(shape=(len(eigenvalues), len(s)))
     elif t == 0:
@@ -34,9 +33,16 @@ def _poisson_cdf(s, t, eigenvalues):
 
 def transform_eigenvalues_s(s, eigenvalues, start_time, end_time):
     """Transform s counts by eigenvalues to generate len(eigen) x len(s) matrix"""
-    eigenvalues_s = (np.transpose([(eigenvalues/(eigenvalues+1)) 
-                                  * (1/(eigenvalues+1)) ** s_val
-                                  for s_val in s]))
+
+    s_counter = Counter(s)
+
+    eigenvalues_s = np.concatenate([
+        np.transpose([
+            (eigenvalues/(eigenvalues+1)) 
+            * (1/(eigenvalues+1)) ** s_val] 
+            * s_count) 
+            for s_val, s_count in s_counter.items()], axis=1)
+    
     eigenvalues_exp = np.transpose(np.exp(eigenvalues * start_time))
     pois_start = _poisson_cdf(s, start_time, eigenvalues)
     pois_end = _poisson_cdf(s, end_time, eigenvalues)
