@@ -86,6 +86,8 @@ class DivergenceModel:
         """Generate transition rate matrices for a given DivergenceModel given parameter values"""
         Qs = []
 
+        assert self.n_theta_params > 0, "No theta parameters specfied - have you added epochs?"
+
         thetas = param_vals[0:self.n_theta_params]
         thetas_iter = iter(thetas)
         ms = param_vals[-self.n_m_params:]
@@ -141,12 +143,12 @@ class DivergenceModel:
             Qs = self.generate_markov_chain(param_vals)
     
             if self.n_m_params == 0:
-                ts = param_vals[self.n_theta_params:]
+                ts = param_vals[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
             else:
                 ts = param_vals[self.n_theta_params:-self.n_m_params]
 
             ts.sort() # sort most recent -> older
-            assert len(ts) == 2
+            assert len(ts) == 2, f"Incorrect length {len(ts)} of list ts"
 
             logl = likelihood.log_likelihood(Qs, ts, s1, s2, s3)
 

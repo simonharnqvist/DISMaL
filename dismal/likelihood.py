@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.stats import poisson
 from dismal.markov_matrices import StochasticMatrix
+from collections import Counter
 
 def _epoch_durations(ts):
     durations = [ts[0]]
@@ -8,13 +9,28 @@ def _epoch_durations(ts):
         durations.append(t - durations[t_idx-1])
     return durations
 
+# def _poisson_cdf(s, t, eigenvalues):
+#     if t is None:
+#         return np.zeros(shape=(len(eigenvalues), len(s)))
+#     elif t == 0:
+#         return np.ones(shape=(len(eigenvalues), len(s)))
+#     else:
+#         return np.transpose(np.array([poisson.cdf(s_val, t*(eigenvalues+1)) for s_val in s]))
+    
 def _poisson_cdf(s, t, eigenvalues):
+    """Consider Cythonisation if necessary"""
     if t is None:
         return np.zeros(shape=(len(eigenvalues), len(s)))
     elif t == 0:
         return np.ones(shape=(len(eigenvalues), len(s)))
     else:
-        return np.transpose(np.array([poisson.cdf(s_val, t*(eigenvalues+1)) for s_val in s]))
+        s_counter = Counter(s)
+        return np.concatenate(
+            [np.transpose([
+                poisson.cdf(s_val, t*(eigenvalues+1))] * s_count) 
+                        for s_val, s_count in s_counter.items()], axis=1)
+            
+
 
 def transform_eigenvalues_s(s, eigenvalues, start_time, end_time):
     """Transform s counts by eigenvalues to generate len(eigen) x len(s) matrix"""
