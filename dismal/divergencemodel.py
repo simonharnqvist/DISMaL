@@ -215,7 +215,7 @@ class DivergenceModel:
         self.negll = -optimised.fun
         self.n_params = self.n_theta_params + self.n_t_params + self.n_m_params
         self.inferred_thetas = self.inferred_params[0:self.n_theta_params]
-        self.inferred_taus = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
+        self.inferred_ts = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
         if self.n_m_params > 0:
             self.inferred_ms = self.inferred_params[-self.n_m_params:]
         self.res = self._results_dict()
