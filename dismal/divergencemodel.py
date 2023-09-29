@@ -8,6 +8,11 @@ import numpy as np
 class DivergenceModel:
 
     def __init__(self, model_ref=None):
+        """Represent two (potentially) diverging demes.
+
+        Args:
+            model_ref (str, optional): Model reference. Defaults to None.
+        """
         self.model_ref = model_ref
         self.epochs = []
 
@@ -16,7 +21,7 @@ class DivergenceModel:
         self.n_m_params = 0
 
         self.inferred_thetas = None
-        self.inferred_taus = None
+        self.inferred_ts = None
         self.inferred_ms = None
         self.n_params = None
         self.negll = None
@@ -28,6 +33,16 @@ class DivergenceModel:
                   migration,
                   asymmetric_migration=True,
                   migration_direction=None):
+        """Add epoch (period of isolation/gene flow).
+
+        Args:
+            deme_ids (iterable): Tuples of deme IDs per epoch, specified backwards in time,
+              e.g. [("human", "chimp), ("human", "chimp"), ("ancestor",)]
+            migration (bool): Allow migration.
+            asymmetric_migration (bool, optional): Allow asymmetric migration. Defaults to True.
+            migration_direction (iterable, optional): Tuples specifying migration direction
+              per epoch with format (source, destination). Defaults to None.
+        """
         
         epoch = Epoch(
             deme_ids=deme_ids,
@@ -41,7 +56,10 @@ class DivergenceModel:
         self.n_t_params = self.n_t_params + 1
         self.n_m_params = self.n_m_params + epoch.n_m_params
 
-    def get_initial_values(self, initial_values=None, s1=None, s2=None, s3=None, blocklen=None): 
+
+    def _get_initial_values(self, initial_values=None,
+                             s1=None, s2=None, s3=None, blocklen=None):
+        """Get initial values for theta, t, and m""" 
 
         if initial_values is not None:
             assert len(initial_values) == 3, "Initial values array should have 3 values: [theta, t, M]"
@@ -54,7 +72,7 @@ class DivergenceModel:
             assert isinstance(blocklen, int), "blocklen (int) must be provided if initial values are to be estimated from data" 
 
             theta_iv = popgen_stats.estimate_pi(s1, s2)
-            t_iv = popgen_stats.estimate_dxy(s3, blocklen)
+            t_iv = popgen_stats.estimate_dxy(s3, blocklen)/len(self.epochs)
             m_iv = 0
         
         thetas_iv = [theta_iv] * self.n_theta_params
@@ -63,8 +81,10 @@ class DivergenceModel:
         initial_values = thetas_iv + ts_iv + ms_iv
 
         return initial_values
-    
-    def get_bounds(self, lower_bounds=None):
+
+
+    def _get_bounds(self, lower_bounds=None):
+        """Format lower bounds for optimisation."""
         if lower_bounds is not None:
             assert len(lower_bounds) == 3, "Lower bounds array should have 3 values: [theta, t, m]"
             theta_lb = lower_bounds[0]
@@ -81,8 +101,9 @@ class DivergenceModel:
         bounds = theta_bounds + t_bounds + migr_bounds
 
         return bounds
-    
-    def generate_markov_chain(self, param_vals):
+
+
+    def _generate_markov_chain(self, param_vals):
         """Generate transition rate matrices for a given DivergenceModel given parameter values"""
         Qs = []
 
@@ -123,47 +144,59 @@ class DivergenceModel:
         Qs.append(TransitionRateMatrix(single_deme=True, thetas=[thetas[-1]], ms=[0]))
 
         return Qs
-    
+
+
     @staticmethod
     def _validate_params(param_vals):
+        """Check that parameter values are positive and finite."""
         all_positive = all([param >= 0 for param in param_vals])
         contains_nan = any([math.isnan(param) for param in param_vals])
         contains_inf = any([math.isinf(param) for param in param_vals])
     
         return all_positive and not contains_nan and not contains_inf
     
-    def _log_likelihood_from_params(self, param_vals, s1, s2, s3, verbose=False):
-        
+    def neg_log_likelihood(self, param_vals, s1, s2, s3, verbose=False):
+        """Calculate negative log-likelihood of parameter set.
+
+        Args:
+            param_vals (iterable): Parameter values in order (thetas, ts, ms),
+              internally ordered from most recent to least recent (i.e. backwards in time).
+            s1 (ndarray): Counts of segregating sites per locus in state 1.
+            s2 (ndarray): Counts of segregating sites per locus in state 2.
+            s3 (ndarray): Counts of segregating sites per locus in state 3.
+            verbose (bool, optional): Whether to print output. Defaults to False.
+
+        Returns:
+            float: Negative log-likelihood.
+        """
+
         valid_params = self._validate_params(param_vals)
         if not valid_params:
             if verbose:
                 print(f"Warning: invalid parameters {param_vals}")
             return np.nan
         else:
-            Qs = self.generate_markov_chain(param_vals)
+            Qs = self._generate_markov_chain(param_vals)
     
-            if self.n_m_params == 0:
-                ts = param_vals[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
-            else:
-                ts = param_vals[self.n_theta_params:-self.n_m_params]
+            ts = param_vals[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
+            assert len(ts) == len(self.epochs)-1, f"Incorrect length {len(ts)} of list ts"
 
-            ts.sort() # sort most recent -> older
-            assert len(ts) == 2, f"Incorrect length {len(ts)} of list ts"
-
-            logl = likelihood.log_likelihood(Qs, ts, s1, s2, s3)
+            logl = likelihood.neg_logl(Qs, ts, s1, s2, s3)
 
             if verbose:
                 print(param_vals, logl)
         
             return logl
     
-    def minimise_neg_log_likelihood(self, s1, s2, s3, initial_values, bounds, verbose=False):
+    
+    def _minimise_neg_log_likelihood(self, s1, s2, s3, initial_values, bounds, verbose=False):
+        """Obtain maximum likelihood estimate of parameters by optimisation."""
 
         assert len(initial_values) == self.n_theta_params + self.n_t_params + self.n_m_params
 
         opt_algos = ["L-BFGS-B", "Nelder-Mead", "Powell"]
         for algo_idx, algo in enumerate(opt_algos):
-            optimised = scipy.optimize.minimize(self._log_likelihood_from_params,
+            optimised = scipy.optimize.minimize(self.neg_log_likelihood,
                                                 x0=initial_values,
                                                 method=algo,
                                                 args=(s1, s2, s3, verbose),
@@ -179,35 +212,49 @@ class DivergenceModel:
         assert optimised.success, f"Optimisers {opt_algos} all failed to maximise the likelihood"
         
         self.inferred_params = optimised.x
-        self.negll = optimised.fun
+        self.negll = -optimised.fun
         self.n_params = self.n_theta_params + self.n_t_params + self.n_m_params
         self.inferred_thetas = self.inferred_params[0:self.n_theta_params]
-        self.inferred_taus = self.inferred_params[self.n_theta_params:-self.n_m_params]
+        self.inferred_taus = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
         if self.n_m_params > 0:
             self.inferred_ms = self.inferred_params[-self.n_m_params:]
-        self.aic = 2*self.n_params + 2*self.negll
-        self.res = self.results_dict()
+        self.res = self._results_dict()
+
 
     def fit(self,
             s1, s2, s3, blocklen=None,
             initial_values = None,
             bounds = None):
+        """Estimate parameter values by maximum likelihood.
+
+        Args:
+            s1 (ndarray): Counts of segregating sites per locus in state 1.
+            s2 (ndarray): Counts of segregating sites per locus in state 2.
+            s3 (ndarray): Counts of segregating sites per locus in state 3.
+            blocklen (int, optional): Length of loci/blocks used to obtain s counts.
+              Required unless initial values are provided. Defaults to None.
+            initial_values (iterable, optional): Initial values for parameter set. Defaults to None.
+            bounds (iterable, optional): Bounds in format (min, max) per parameter. Defaults to None.
+
+        Returns:
+            dict: Dictionary of results of optimisation.
+        """
         
         if initial_values is None:
-            initial_values = self.get_initial_values(s1=s1, s2=s2, s3=s3, blocklen=blocklen)
+            initial_values = self._get_initial_values(s1=s1, s2=s2, s3=s3, blocklen=blocklen)
         
         if bounds is None:
-            bounds = self.get_bounds()
+            bounds = self._get_bounds()
 
-        return self.minimise_neg_log_likelihood(s1, s2, s3, initial_values, bounds, verbose=False)
+        return self._minimise_neg_log_likelihood(s1, s2, s3, initial_values, bounds, verbose=False)
     
-    def results_dict(self):
+    def _results_dict(self):
         return {
             "model_ref": self.model_ref,
             "n_epochs": len(self.epochs),
             "demes": [[i for i in epoch.deme_ids] for epoch in self.epochs],
             "thetas": self.inferred_thetas,
-            "taus": self.inferred_taus,
+            "ts": self.inferred_ts,
             "mig_rates": self.inferred_ms,
             "n_params": self.n_params,
             "neg_log_likelihood": self.negll,
@@ -215,6 +262,16 @@ class DivergenceModel:
     
     @staticmethod
     def from_dict_spec(model_spec):
+        """Generate DivergenceModel object from dictionary specification.
+
+        Args:
+            model_spec (dict): Dictionary with keys
+              "deme_ids", "model_ref", "epochs", "migration", "migration_direction", "asym_migration".
+              Example: {"model_ref": "gim_symmetric", "deme_ids": self.deme_ids, "epochs": 3, "migration": (True, True, False), "asym_migration": (False, False, False)}])
+
+        Returns:
+            DivergenceModel: Model object with specified settings.
+        """
         deme_ids = model_spec["deme_ids"]
 
         if "model_ref" in model_spec.keys():

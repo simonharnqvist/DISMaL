@@ -5,7 +5,14 @@ import math
 class TransitionRateMatrix:
 
     def __init__(self, single_deme, thetas, ms, asymmetric_migration=True):
-        """Create a generator matrix that describes that transition rates between states in the stochastic model."""
+        """Generator matrix that describes that transition rates between states in the stochastic model.
+
+        Args:
+            single_deme (bool): Whether to construct matrix for single deme (i.e. in final epoch).
+            thetas (iterable): Theta (population size) parameters.
+            ms (iterable): Migration rates.
+            asymmetric_migration (bool, optional): _description_. Defaults to True.
+        """
 
         assert 1 <= len(thetas) <= 2
         assert 0 <= len(ms) <= 2
@@ -50,6 +57,7 @@ class TransitionRateMatrix:
         return np.transpose(self.matrix)
 
     def generate(self):
+        """Generate transition rate matrix."""
 
         if any([self.pop_size1, self.pop_size2, self.mig_rate1, self.mig_rate2]) < 0:
             return None
@@ -84,8 +92,12 @@ class TransitionRateMatrix:
 class StochasticMatrix:
     
     def __init__(self, Q, t):
-        """ Fast matrix exponentiation to produce stochastic matrix from eigenvalues and eigenvectors of transition rate matrix. Equivalent to linalg.expm(Q), but faster if eigenvalues+vectors are already available.
-    """
+        """Transition probability (stochastic) matrix of demography during single epoch.
+
+        Args:
+            Q (TransitionRateMatrix): Transition rate matrix.
+            t (float): Epoch duration in Ne generations.
+        """
         self.eigenvect_mat = Q.eigenvectors
         self.inv_eigenvect_mat = Q.eigenvectors_inv
         self.eigenvals = Q.eigenvalues
@@ -99,4 +111,5 @@ class StochasticMatrix:
         return self.matrix[index]
 
     def generate(self):
+        """Generate stochastic matrix."""
         return self.inv_eigenvect_mat @ np.diag(np.exp(self.eigenvals * self.t)) @ self.eigenvect_mat
