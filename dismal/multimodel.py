@@ -57,15 +57,20 @@ class MultiModel:
 
         for s_arr in [s1, s2, s3]:
             assert isinstance(s_arr, np.ndarray), \
-                "s1, s2, and s3 must be NumPy arrays where each entry s1[i] corresponds to the count of i segregating sites"
+                "s1, s2, and s3 must be NumPy arrays"
 
         for dict_spec in self.model_space:
-            mod = DivergenceModel.from_dict_spec(dict_spec)
-            mod.fit(s1, s2, s3, blocklen)
 
-            if verbose:
-                print(mod.res)
-            self.models.append(mod)
+            try:
+                mod = DivergenceModel.from_dict_spec(dict_spec)
+                mod.fit(s1, s2, s3, blocklen)
+
+                if verbose:
+                    print(mod.res)
+                self.models.append(mod)
+
+            except Exception:
+                print(f"Warning: model fitting of mod {mod.model_ref} failed")
 
 
         

@@ -3,7 +3,6 @@ README.md
 setup.py
 dismal/demography.py
 dismal/divergencemodel.py
-dismal/ipython_cell_input.py
 dismal/likelihood.py
 dismal/markov_matrices.py
 dismal/multimodel.py
