@@ -189,12 +189,21 @@ class DivergenceModel:
             return logl
     
     
-    def _minimise_neg_log_likelihood(self, s1, s2, s3, initial_values, bounds, verbose=False):
+    def _minimise_neg_log_likelihood(self,
+                                      s1, s2, s3,
+                                        initial_values,
+                                          bounds,
+                                          optimisation_method=None,
+                                            verbose=False):
         """Obtain maximum likelihood estimate of parameters by optimisation."""
 
         assert len(initial_values) == self.n_theta_params + self.n_t_params + self.n_m_params
 
-        opt_algos = ["L-BFGS-B", "Nelder-Mead", "Powell"]
+        if optimisation_method is None:
+            opt_algos = ["L-BFGS-B", "Nelder-Mead", "Powell"]
+        else:
+            opt_algos = list(optimisation_method)
+        
         for algo_idx, algo in enumerate(opt_algos):
             optimised = scipy.optimize.minimize(self.neg_log_likelihood,
                                                 x0=initial_values,
@@ -224,7 +233,8 @@ class DivergenceModel:
     def fit(self,
             s1, s2, s3, blocklen=None,
             initial_values = None,
-            bounds = None):
+            bounds = None,
+            optimisation_methods=None):
         """Estimate parameter values by maximum likelihood.
 
         Args:
@@ -235,6 +245,9 @@ class DivergenceModel:
               Required unless initial values are provided. Defaults to None.
             initial_values (iterable, optional): Initial values for parameter set. Defaults to None.
             bounds (iterable, optional): Bounds in format (min, max) per parameter. Defaults to None.
+            optimisation_methods (iterable, optional): Optimisation algorithms to use. 
+                See scipy.minimise for full list. Defaults to None, in which case 
+                L-BFGS-B, Nelder-Mead, and Powell are attempted sequentially.
 
         Returns:
             dict: Dictionary of results of optimisation.
@@ -246,7 +259,11 @@ class DivergenceModel:
         if bounds is None:
             bounds = self._get_bounds()
 
-        return self._minimise_neg_log_likelihood(s1, s2, s3, initial_values, bounds, verbose=False)
+        return self._minimise_neg_log_likelihood(s1, s2, s3,
+                                                 initial_values,
+                                                 bounds,
+                                                 optimisation_methods,
+                                                 verbose=False)
     
     def _results_dict(self):
         return {
