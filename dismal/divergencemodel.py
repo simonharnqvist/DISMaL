@@ -1,6 +1,7 @@
 from dismal.demography import Epoch
 from dismal import likelihood, popgen_stats
 from dismal.markov_matrices import TransitionRateMatrix
+from iclik import info_crit
 import scipy
 import math
 import numpy as np
@@ -16,6 +17,10 @@ class DivergenceModel:
         self.model_ref = model_ref
         self.epochs = []
 
+        self.s1 = None
+        self.s2 = None
+        self.s3 = None
+
         self.n_theta_params = 0
         self.n_t_params = -1  # 2 epochs = 1 t, 3 epochs = 2 ts
         self.n_m_params = 0
@@ -27,6 +32,7 @@ class DivergenceModel:
         self.negll = None
         self.res = None
         self.inferred_params = None
+        self.claic = None
 
     def add_epoch(self,
                   deme_ids,
@@ -170,6 +176,10 @@ class DivergenceModel:
             float: Negative log-likelihood.
         """
 
+        self.s1 = s1
+        self.s2 = s2
+        self.s3 = s3
+
         valid_params = self._validate_params(param_vals)
         if not valid_params:
             if verbose:
@@ -227,6 +237,7 @@ class DivergenceModel:
         self.inferred_ts = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
         if self.n_m_params > 0:
             self.inferred_ms = self.inferred_params[-self.n_m_params:]
+        self.claic = self.calculate_claic()
         self.res = self._results_dict()
 
 
@@ -252,6 +263,10 @@ class DivergenceModel:
         Returns:
             dict: Dictionary of results of optimisation.
         """
+
+        self.s1 = s1
+        self.s2 = s2
+        self.s3 = s3
         
         if initial_values is None:
             initial_values = self._get_initial_values(s1=s1, s2=s2, s3=s3, blocklen=blocklen)
@@ -275,6 +290,7 @@ class DivergenceModel:
             "mig_rates": self.inferred_ms,
             "n_params": self.n_params,
             "neg_log_likelihood": self.negll,
+            "claic": self.claic
         }
     
     @staticmethod
@@ -327,6 +343,15 @@ class DivergenceModel:
                             migration_direction = migration_direction_epoch)
 
         return mod
+    
+    def _calculate_claic(self):
+        """Calculate Composite likelihood AIC."""
+        
+        def _logl_wrapper(params):
+            return self.neg_log_likelihood(params, self.s1, self.s2, self.s3)
+        
+        cl_akaike = info_crit.claic(_logl_wrapper, self.inferred_params)
+        self.claic = cl_akaike
 
         
 
