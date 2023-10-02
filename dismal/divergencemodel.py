@@ -1,10 +1,11 @@
-from dismal.demography import Epoch
-from dismal import likelihood, popgen_stats
-from dismal.markov_matrices import TransitionRateMatrix
-from iclik import info_crit
+from iclik import inform_crit
 import scipy
 import math
 import numpy as np
+import warnings
+from dismal.demography import Epoch
+from dismal import likelihood, popgen_stats
+from dismal.markov_matrices import TransitionRateMatrix
 
 class DivergenceModel:
 
@@ -183,7 +184,7 @@ class DivergenceModel:
         valid_params = self._validate_params(param_vals)
         if not valid_params:
             if verbose:
-                print(f"Warning: invalid parameters {param_vals}")
+                warnings.warn(f"Invalid parameters {param_vals}", UserWarning)
             return np.nan
         else:
             Qs = self._generate_markov_chain(param_vals)
@@ -237,7 +238,7 @@ class DivergenceModel:
         self.inferred_ts = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
         if self.n_m_params > 0:
             self.inferred_ms = self.inferred_params[-self.n_m_params:]
-        self.claic = self.calculate_claic()
+        self.claic = self._calculate_claic()
         self.res = self._results_dict()
 
 
@@ -350,13 +351,9 @@ class DivergenceModel:
         def _logl_wrapper(params):
             return self.neg_log_likelihood(params, self.s1, self.s2, self.s3)
         
-        cl_akaike = info_crit.claic(_logl_wrapper, self.inferred_params)
-        self.claic = cl_akaike
-
-        
-
-        
-        
-
-
-
+        try:
+            cl_akaike = inform_crit.claic(_logl_wrapper, self.inferred_params)
+        except Exception:
+            warnings.warn(f"CLAIC could not be calculated", UserWarning)
+            cl_akaike = None
+        return cl_akaike
