@@ -7,7 +7,7 @@ Inference of gene flow in the process of speciation: Efficient maximum-likelihoo
 Theoretical Population Biology 140:1-15.
 https://doi.org/10.1016/j.tpb.2021.03.001.*
 
-Documentation and tutorials are forthcoming.
+**For documentation, please see the [Wiki](https://github.com/simonharnqvist/DISMaL/wiki/1.-Home)**
 
 ## Installation
 DISMaL is currently only available as a pre-release from this GitHub repo. Install using:
