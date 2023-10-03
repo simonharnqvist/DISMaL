@@ -3,6 +3,7 @@ import scipy
 import math
 import numpy as np
 import warnings
+from prettytable import PrettyTable
 from dismal.demography import Epoch
 from dismal import likelihood, popgen_stats
 from dismal.markov_matrices import TransitionRateMatrix
@@ -21,6 +22,7 @@ class DivergenceModel:
         self.s1 = None
         self.s2 = None
         self.s3 = None
+        self.blocklen = None
 
         self.n_theta_params = 0
         self.n_t_params = -1  # 2 epochs = 1 t, 3 epochs = 2 ts
@@ -29,6 +31,18 @@ class DivergenceModel:
         self.inferred_thetas = None
         self.inferred_ts = None
         self.inferred_ms = None
+
+        self.scaled_thetas = None
+        self.scaled_ts = None
+        self.scaled_ms = None
+        self.scaled_params = None
+
+        self.deme_ids = []
+
+        self.migration_table = None
+        self.deme_table = None
+        self.epoch_table = None
+
         self.n_params = None
         self.negll = None
         self.res = None
@@ -62,6 +76,59 @@ class DivergenceModel:
         self.n_theta_params = self.n_theta_params + len(deme_ids)
         self.n_t_params = self.n_t_params + 1
         self.n_m_params = self.n_m_params + epoch.n_m_params
+        self.deme_ids.append(deme_ids)
+
+    @staticmethod
+    def from_dict_spec(model_spec):
+        """Generate DivergenceModel object from dictionary specification.
+
+        Args:
+            model_spec (dict): Dictionary with keys
+              "deme_ids", "model_ref", "epochs", "migration", "migration_direction", "asym_migration".
+              Example: {"model_ref": "gim_symmetric", "deme_ids": self.deme_ids, "epochs": 3, "migration": (True, True, False), "asym_migration": (False, False, False)}])
+
+        Returns:
+            DivergenceModel: Model object with specified settings.
+        """
+        deme_ids = model_spec["deme_ids"]
+
+        if "model_ref" in model_spec.keys():
+            model_ref = model_spec["model_ref"]
+        else:
+            model_ref = None
+
+        mod = DivergenceModel(model_ref=model_ref)
+        mod.deme_ids = deme_ids
+
+        for epoch_idx in range(model_spec["epochs"]):
+            allow_migration_epoch = model_spec["migration"][epoch_idx]
+            assert isinstance(allow_migration_epoch, bool)
+
+            if allow_migration_epoch:
+
+                if "asym_migration" in model_spec.keys():
+                    allow_asymmetric_migration_epoch = model_spec["asym_migration"][epoch_idx]
+                else:
+                    allow_asymmetric_migration_epoch = False
+
+                if "migration_direction" in model_spec.keys():
+                    migration_direction_epoch = model_spec["migration_direction"][epoch_idx]
+                    assert len(migration_direction_epoch) == 2, "Migration direction must be specified as (source, target) tuple per epoch"
+
+                    assert [migration_direction_epoch[deme_idx] in deme_ids[epoch_idx] for deme_idx in [0,1]]
+                else:
+                    migration_direction_epoch = None
+
+            else:
+                allow_asymmetric_migration_epoch = False
+                migration_direction_epoch = None
+
+            mod.add_epoch(deme_ids = deme_ids[epoch_idx],
+                            migration = allow_migration_epoch,
+                            asymmetric_migration = allow_asymmetric_migration_epoch,
+                            migration_direction = migration_direction_epoch)
+
+        return mod
 
 
     def _get_initial_values(self, initial_values=None,
@@ -232,34 +299,44 @@ class DivergenceModel:
         assert optimised.success, f"Optimisers {opt_algos} all failed to maximise the likelihood"
         
         self.inferred_params = optimised.x
-        self.negll = -optimised.fun
+        self.negll = optimised.fun
         self.n_params = self.n_theta_params + self.n_t_params + self.n_m_params
         self.inferred_thetas = self.inferred_params[0:self.n_theta_params]
         self.inferred_ts = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
         if self.n_m_params > 0:
             self.inferred_ms = self.inferred_params[-self.n_m_params:]
+
+        self.scaled_thetas = self.inferred_thetas/self.blocklen
+        self.scaled_ts = self.inferred_ts * 2
+
+        self._add_params_to_epochs()
+
+        self.migration_table = self._make_migration_table()
+        self.epoch_table = self._make_epoch_table()
+        self.deme_table = self._make_deme_table()
+
         self.claic = self._calculate_claic()
-        self.res = self._results_dict()
 
 
     def fit(self,
             s1, s2, s3, blocklen=None,
-            initial_values = None,
-            bounds = None,
-            optimisation_methods=None):
+            initial_values=None,
+            bounds=None,
+            optimisation_methods=None,
+            print_output=True):
         """Estimate parameter values by maximum likelihood.
 
         Args:
             s1 (ndarray): Counts of segregating sites per locus in state 1.
             s2 (ndarray): Counts of segregating sites per locus in state 2.
             s3 (ndarray): Counts of segregating sites per locus in state 3.
-            blocklen (int, optional): Length of loci/blocks used to obtain s counts.
-              Required unless initial values are provided. Defaults to None.
+            blocklen (int): Length of loci/blocks used to obtain s counts.
             initial_values (iterable, optional): Initial values for parameter set. Defaults to None.
             bounds (iterable, optional): Bounds in format (min, max) per parameter. Defaults to None.
             optimisation_methods (iterable, optional): Optimisation algorithms to use. 
                 See scipy.minimise for full list. Defaults to None, in which case 
                 L-BFGS-B, Nelder-Mead, and Powell are attempted sequentially.
+            print_output (bool, optional): Whether to print output to console.
 
         Returns:
             dict: Dictionary of results of optimisation.
@@ -268,6 +345,7 @@ class DivergenceModel:
         self.s1 = s1
         self.s2 = s2
         self.s3 = s3
+        self.blocklen = blocklen
         
         if initial_values is None:
             initial_values = self._get_initial_values(s1=s1, s2=s2, s3=s3, blocklen=blocklen)
@@ -275,75 +353,42 @@ class DivergenceModel:
         if bounds is None:
             bounds = self._get_bounds()
 
-        return self._minimise_neg_log_likelihood(s1, s2, s3,
+        self._minimise_neg_log_likelihood(s1, s2, s3,
                                                  initial_values,
                                                  bounds,
                                                  optimisation_methods,
                                                  verbose=False)
+        
+        if print_output is True:
+            self._print_output()
     
-    def _results_dict(self):
-        return {
-            "model_ref": self.model_ref,
-            "n_epochs": len(self.epochs),
-            "demes": [[i for i in epoch.deme_ids] for epoch in self.epochs],
-            "thetas": self.inferred_thetas,
-            "ts": self.inferred_ts,
-            "mig_rates": self.inferred_ms,
-            "n_params": self.n_params,
-            "neg_log_likelihood": self.negll,
-            "claic": self.claic
-        }
-    
-    @staticmethod
-    def from_dict_spec(model_spec):
-        """Generate DivergenceModel object from dictionary specification.
+    def _add_params_to_epochs(self):
+        """Update Epoch objects"""
+        thetas_iter = iter(self.inferred_thetas)
+        if self.inferred_ms is not None:
+            ms_iter = iter(self.inferred_ms)
+        start_times = [0, self.inferred_ts[0], sum(self.inferred_ts)]
+        end_times = [self.inferred_ts[0], sum(self.inferred_ts), None]
 
-        Args:
-            model_spec (dict): Dictionary with keys
-              "deme_ids", "model_ref", "epochs", "migration", "migration_direction", "asym_migration".
-              Example: {"model_ref": "gim_symmetric", "deme_ids": self.deme_ids, "epochs": 3, "migration": (True, True, False), "asym_migration": (False, False, False)}])
+        updated_epochs = []
 
-        Returns:
-            DivergenceModel: Model object with specified settings.
-        """
-        deme_ids = model_spec["deme_ids"]
+        for epoch_idx, epoch in enumerate(self.epochs):
+            updated_epoch = Epoch(
+                deme_ids=epoch.deme_ids,
+                migration=epoch.migration,
+                asymmetric_migration=epoch.asymmetric_migration,
+                migration_direction=epoch.migration_direction)
 
-        if "model_ref" in model_spec.keys():
-            model_ref = model_spec["model_ref"]
-        else:
-            model_ref = None
+            updated_epoch.thetas = [next(thetas_iter) for _ in range(epoch.n_thetas)]
+            updated_epoch.start_time = start_times[epoch_idx]
+            updated_epoch.end_time = end_times[epoch_idx]
+            if updated_epoch.migration is True:
+                updated_epoch.migration_rates = [next(ms_iter) for _ in range(epoch.n_m_params)]
 
-        mod = DivergenceModel(model_ref=model_ref)
+            updated_epochs.append(updated_epoch)
 
-        for epoch_idx in range(model_spec["epochs"]):
-            allow_migration_epoch = model_spec["migration"][epoch_idx]
-            assert isinstance(allow_migration_epoch, bool)
+        self.epochs = updated_epochs
 
-            if allow_migration_epoch:
-
-                if "asym_migration" in model_spec.keys():
-                    allow_asymmetric_migration_epoch = model_spec["asym_migration"][epoch_idx]
-                else:
-                    allow_asymmetric_migration_epoch = False
-
-                if "migration_direction" in model_spec.keys():
-                    migration_direction_epoch = model_spec["migration_direction"][epoch_idx]
-                    assert len(migration_direction_epoch) == 2, "Migration direction must be specified as (source, target) tuple per epoch"
-
-                    assert [migration_direction_epoch[deme_idx] in deme_ids[epoch_idx] for deme_idx in [0,1]]
-                else:
-                    migration_direction_epoch = None
-
-            else:
-                allow_asymmetric_migration_epoch = False
-                migration_direction_epoch = None
-
-            mod.add_epoch(deme_ids = deme_ids[epoch_idx],
-                            migration = allow_migration_epoch,
-                            asymmetric_migration = allow_asymmetric_migration_epoch,
-                            migration_direction = migration_direction_epoch)
-
-        return mod
     
     def _calculate_claic(self):
         """Calculate Composite likelihood AIC."""
@@ -357,3 +402,104 @@ class DivergenceModel:
             warnings.warn(f"CLAIC could not be calculated", UserWarning)
             cl_akaike = None
         return cl_akaike
+    
+    def _make_deme_table(self):
+        """Output table of demes and thetas"""
+        deme_ids_list = list(sum(self.deme_ids, ()))
+        deme_table = PrettyTable()
+        deme_table.field_names = ["Deme ID", "Epoch", "Theta (site)", "Theta (block)"]
+        for epoch_idx, epoch in enumerate(self.epochs):
+            for deme_idx, deme in enumerate(epoch.deme_ids):
+                deme_table.add_row([deme,
+                                    epoch_idx,
+                                 round(epoch.thetas[deme_idx], 5),
+                                   round(epoch.thetas[deme_idx], 5)])
+
+        return deme_table
+    
+    def _make_migration_table(self):
+        """Output table of migration rates"""
+        mig_table = PrettyTable()
+        mig_table.field_names = ["Source->Target", "Epoch", "Migration rate (M)"]
+
+
+        for epoch_idx, epoch in enumerate(self.epochs):
+            if epoch.migration is True:
+                if epoch.migration_direction is not None:
+                    assert len([epoch.migration_sources]) == 1
+                    assert len([epoch.migration_targets]) == 1
+                    mig_table.add_row([f"{epoch.migration_sources}->{epoch.migration_targets}",
+                                       epoch_idx,
+                                      epoch.migration_rates[0]])
+                elif epoch.asymmetric_migration is False:
+                    mig_table.add_row([f"{epoch.deme_ids[0]}<->{epoch.deme_ids[1]}",
+                                       epoch_idx,
+                                      epoch.migration_rates[0]])
+                elif epoch.asymmetric_migration is True and epoch.migration_direction is None:
+                    mig_table.add_row([f"{epoch.deme_ids[0]}->{epoch.deme_ids[1]}",
+                                       epoch_idx,
+                                      epoch.migration_rates[0]])
+                    mig_table.add_row([f"{epoch.deme_ids[1]}->{epoch.deme_ids[0]}",
+                                       epoch_idx,
+                                      epoch.migration_rates[1]])
+                    
+        return mig_table
+    
+    def _make_epoch_table(self):
+        """Output table of epoch data"""
+        epoch_table = PrettyTable()
+        epoch_table.field_names = ["Epoch",
+                                   "Start time",
+                                  "End time",
+                                    "Demes",
+                                      "Migration sources",
+                                        "Migration targets",
+                                          "Asymmetric migration"]
+        for epoch_idx, epoch in enumerate(self.epochs):
+            epoch_table.add_row(
+                [
+                    epoch_idx,
+                    epoch.start_time,
+                    epoch.end_time,
+                    epoch.deme_ids,
+                    epoch.migration_sources,
+                    epoch.migration_targets,
+                    epoch.asymmetric_migration
+
+                ]
+            )
+
+        return epoch_table
+    
+    def _print_output(self):
+        print(
+            f"""
+            DISMaL DivergenceModel
+
+            Inferred parameters can be directly accessed using the .inferred_params and .scaled_params attributes. 
+            Individual estimates are also accessible; use dir(model) for a list.
+
+            Negative log-likelihood: {self.negll}
+            Composite likelihood AIC: {self.claic}
+
+            Migration rate estimates: 
+
+{self.migration_table}
+
+            Theta estimates: 
+
+{self.deme_table}
+
+            Epochs: 
+
+{self.epoch_table}
+
+            """
+        )
+
+
+
+
+                    
+
+        

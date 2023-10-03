@@ -93,4 +93,4 @@ def test_model_fitting():
     s1, s2, s3 = [np.ones(10)]*3
     mod.fit(s1, s2, s3, blocklen=500)
 
-    assert isinstance(mod.res, dict)
+    assert len(mod.inferred_params) == 9
