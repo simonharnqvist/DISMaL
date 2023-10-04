@@ -7,6 +7,7 @@ from prettytable import PrettyTable
 from dismal.demography import Epoch
 from dismal import likelihood, popgen_stats
 from dismal.markov_matrices import TransitionRateMatrix
+from decimal import Decimal
 
 class DivergenceModel:
 
@@ -27,6 +28,10 @@ class DivergenceModel:
         self.n_theta_params = 0
         self.n_t_params = -1  # 2 epochs = 1 t, 3 epochs = 2 ts
         self.n_m_params = 0
+
+        self.ts_theta_scaled = None
+        self.ts_generations = None
+        self.ts_2n = None
 
         self.inferred_thetas = None
         self.inferred_ts = None
@@ -301,13 +306,16 @@ class DivergenceModel:
         self.inferred_params = optimised.x
         self.negll = optimised.fun
         self.n_params = self.n_theta_params + self.n_t_params + self.n_m_params
-        self.inferred_thetas = self.inferred_params[0:self.n_theta_params]
-        self.inferred_ts = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
+        self.thetas_block = np.array(self.inferred_params[0:self.n_theta_params])
+        
         if self.n_m_params > 0:
             self.inferred_ms = self.inferred_params[-self.n_m_params:]
 
-        self.scaled_thetas = self.inferred_thetas/self.blocklen
-        self.scaled_ts = self.inferred_ts * 2
+        self.thetas_site = self.thetas_block/self.blocklen
+
+
+        self.ts_theta_scaled = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
+        self.ts_2n = 2*(self.ts_theta_scaled/self.thetas_block[3])
 
         self._add_params_to_epochs()
 
@@ -364,11 +372,11 @@ class DivergenceModel:
     
     def _add_params_to_epochs(self):
         """Update Epoch objects"""
-        thetas_iter = iter(self.inferred_thetas)
+        thetas_iter = iter(self.thetas_site)
         if self.inferred_ms is not None:
             ms_iter = iter(self.inferred_ms)
-        start_times = [0, self.inferred_ts[0], sum(self.inferred_ts)]
-        end_times = [self.inferred_ts[0], sum(self.inferred_ts), None]
+        start_times = [0, self.ts_2n[0], sum(self.ts_2n)]
+        end_times = [self.ts_2n[0], sum(self.ts_2n), None]
 
         updated_epochs = []
 
@@ -407,13 +415,12 @@ class DivergenceModel:
         """Output table of demes and thetas"""
         deme_ids_list = list(sum(self.deme_ids, ()))
         deme_table = PrettyTable()
-        deme_table.field_names = ["Deme ID", "Epoch", "Theta (site)", "Theta (block)"]
+        deme_table.field_names = ["Deme ID", "Epoch", "Theta (site)"]
         for epoch_idx, epoch in enumerate(self.epochs):
             for deme_idx, deme in enumerate(epoch.deme_ids):
                 deme_table.add_row([deme,
                                     epoch_idx,
-                                 round(epoch.thetas[deme_idx], 5),
-                                   round(epoch.thetas[deme_idx], 5)])
+                                 f'{epoch.thetas[deme_idx]:.3e}'])
 
         return deme_table
     
@@ -449,18 +456,24 @@ class DivergenceModel:
         """Output table of epoch data"""
         epoch_table = PrettyTable()
         epoch_table.field_names = ["Epoch",
-                                   "Start time",
-                                  "End time",
+                                   "Start time (2N gen)",
+                                  "End time (2N gen)",
                                     "Demes",
                                       "Migration sources",
                                         "Migration targets",
                                           "Asymmetric migration"]
         for epoch_idx, epoch in enumerate(self.epochs):
+            
+            if epoch.end_time is not None:
+                display_end = round(epoch.end_time, 3)
+            else:
+                display_end = None
+
             epoch_table.add_row(
                 [
                     epoch_idx,
                     epoch.start_time,
-                    epoch.end_time,
+                    display_end,
                     epoch.deme_ids,
                     epoch.migration_sources,
                     epoch.migration_targets,
@@ -474,11 +487,10 @@ class DivergenceModel:
     def _print_output(self):
         print(
             f"""
-            DISMaL DivergenceModel
+            DISMaL DivergenceModel with {self.n_theta_params} demes and {len(self.epochs)} epochs.
 
-            Inferred parameters can be directly accessed using the .inferred_params and .scaled_params attributes. 
-            Individual estimates are also accessible; use dir(model) for a list.
-
+            Inferred parameters can be directly accessed; use dir(model) for a list. 
+    
             Negative log-likelihood: {self.negll}
             Composite likelihood AIC: {self.claic}
 
@@ -486,7 +498,7 @@ class DivergenceModel:
 
 {self.migration_table}
 
-            Theta estimates: 
+            Demes: 
 
 {self.deme_table}
 
