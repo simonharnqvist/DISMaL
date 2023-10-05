@@ -4,7 +4,7 @@ setup(
     name='dismal',
     version='v0.1.2-alpha',
     packages=['dismal'],
-    requires=[
+    install_requires=[
         "numpy",
         "scipy",
         "iclik",
