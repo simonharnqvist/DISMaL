@@ -5,7 +5,7 @@ import numpy as np
 import warnings
 from prettytable import PrettyTable
 from dismal.demography import Epoch
-from dismal import likelihood, popgen_stats
+from dismal import likelihood
 from dismal.markov_matrices import TransitionRateMatrix
 from decimal import Decimal
 
@@ -150,8 +150,8 @@ class DivergenceModel:
                 assert s_arr is not None, "s1, s2, and s3 required to estimate initial values from data"
             assert isinstance(blocklen, int), "blocklen (int) must be provided if initial values are to be estimated from data" 
 
-            theta_iv = popgen_stats.estimate_pi(s1, s2)
-            t_iv = popgen_stats.estimate_dxy(s3, blocklen)/len(self.epochs)
+            theta_iv = 1
+            t_iv = 1
             m_iv = 0
         
         thetas_iv = [theta_iv] * self.n_theta_params
