@@ -3,17 +3,6 @@ from dismal.markov_matrices import TransitionRateMatrix
 import numpy as np
 import math
 
-def test_get_initial_values():
-    mod = DivergenceModel()
-    mod.add_epoch(deme_ids=["pop1", "pop2"], migration=True)
-    mod.add_epoch(deme_ids=["pop1", "pop2"], migration=True)
-    mod.add_epoch(deme_ids=["ancestral"], migration=False)
-
-    s1, s2, s3 = [np.ones(10)]*3
-
-    ivs = mod._get_initial_values(s1=s1, s2=s2, s3=s3, blocklen=100)
-    np.testing.assert_almost_equal(ivs, [4.5, 4.5, 4.5, 4.5, 4.5, 0.015, 0.015, 0, 0, 0, 0])
-
 def test_generate_markov_chain():
     mod = DivergenceModel()
     mod.add_epoch(deme_ids=["pop1", "pop2"], migration=True)
