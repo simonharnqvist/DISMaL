@@ -315,7 +315,7 @@ class DivergenceModel:
 
 
         self.ts_theta_scaled = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_t_params)]
-        self.ts_2n = 2*(self.ts_theta_scaled/self.thetas_block[3])
+        self.ts_2n = 2*(self.ts_theta_scaled/self.thetas_block[2])
 
         self._add_params_to_epochs()
 
