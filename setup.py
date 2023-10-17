@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='dismal',
-    version='v0.1.3-alpha',
+    version='v0.1.4-alpha',
     packages=['dismal'],
     install_requires=[
         "numpy",
