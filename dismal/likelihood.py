@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.stats import poisson
-from dismal.markov_matrices import StochasticMatrix
+from dismal.markov_matrices import StochasticMatrix, TransitionRateMatrix
 from collections import Counter
+import math
 
     
 def _poisson_cdf(s, t, eigenvalues):
@@ -105,6 +106,40 @@ def neg_logl(Qs, ts, s1, s2, s3):
             _state_log_likelihood(QQs, Ps, As, state_idx))
         
     return -np.sum(state_log_likelihoods)
+
+
+def pr_s(s, state, thetas, epoch_durations, mig_rates):
+    """Convenience function to calculate Pr(S=s) for a single value of s, given parameter set"""
+    q1 = TransitionRateMatrix(single_deme=False,
+                     thetas=[thetas[0], thetas[1]],
+                     ms=[mig_rates[0], mig_rates[1]])
+    q2 = TransitionRateMatrix(single_deme=False,
+                     thetas=[thetas[2], thetas[3]],
+                     ms=[mig_rates[2], mig_rates[3]])
+    q3 = TransitionRateMatrix(single_deme=True,
+                     thetas=[thetas[4]],
+                     ms=[0])
+
+    Qs = [q1, q2, q3]
+
+    start_times = start_times = [0] + [sum(epoch_durations[0:i]) for i in range(1,len(epoch_durations)+1)]
+    end_times = start_times[1:] + [None]  
+
+    QQs = [-Q.eigenvectors_inv @ np.diag(Q.eigenvectors[:, -1]) for Q in Qs[:-1]]
+    Ps = [StochasticMatrix(Q, t=epoch_durations[idx]) for idx, Q in enumerate(Qs[:-1])]
+    Q_eigvals = [np.array(-Q.eigenvalues[0:3]) for Q in Qs[:-1]]
+    Q_eigvals.append(np.array([Qs[-1][0, 3]]))
+
+    As = [_transform_eigenvalues_s([s], 
+                               eigenvalues=Q_eigvals[epoch_idx],
+                               start_time=start_times[epoch_idx],
+                               end_time=end_times[epoch_idx])
+                                      for epoch_idx in range(len(Qs))]
+
+    state_idx = state-1
+    negll = _state_log_likelihood(QQs, Ps, As, state_idx)
+
+    return math.exp(negll)
         
 
 
