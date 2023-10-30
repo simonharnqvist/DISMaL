@@ -24,7 +24,7 @@ class Epoch:
         else:
             self.asymmetric_migration = asymmetric_migration
             self.migration_direction = migration_direction
-        self.n_m_params = self._n_migration_rates()
+        self.n_mig_params = self._n_migration_rates()
 
         self.migration_sources, self.migration_targets = self._get_migration_directions()
         

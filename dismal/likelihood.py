@@ -140,7 +140,10 @@ def pr_s(s, state, thetas, epoch_durations, mig_rates):
     negll = _state_log_likelihood(QQs, Ps, As, state_idx)
 
     return math.exp(negll)
-        
+
+
+def expected_s(state, thetas, epoch_durations, mig_rates, cutoff=50):
+    return [pr_s(s, state, thetas, epoch_durations, mig_rates) for s in range(cutoff)]
 
 
 
