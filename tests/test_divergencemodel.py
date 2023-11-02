@@ -47,39 +47,13 @@ def test_log_likelihood_from_params():
     
     assert math.isclose(logll, 103.93615780591482)
 
-def test_from_dict_spec():
-    dict_spec = {"epochs": 3, 
-                 "deme_ids": [("pop1", "pop2"), ("pop1", "pop2"), ("ancestral", )],
-                              "migration": (True, True, False), 
-                              "asym_migration": (True, True, False), 
-                              "migration_direction": (("pop1", "pop2"), ("pop1", "pop2"))}
-    mod = DivergenceModel.from_dict_spec(dict_spec)
-
-    assert len(mod.epochs) == 3
-    assert mod.n_theta_params == 5
-    assert mod.n_t_params == 2
-    assert mod.n_m_params == 2
-
-    assert mod.epochs[0].migration is True
-    assert mod.epochs[1].migration is True
-    assert mod.epochs[2].migration is False
-    assert mod.epochs[0].asymmetric_migration is True
-    assert mod.epochs[1].asymmetric_migration is True
-    assert mod.epochs[2].asymmetric_migration is False
-    assert mod.epochs[0].migration_direction == ("pop1", "pop2")
-    assert mod.epochs[1].migration_direction == ("pop1", "pop2")
-    assert mod.epochs[0].deme_ids == ("pop1", "pop2")
-    assert mod.epochs[1].deme_ids == ("pop1", "pop2")
-    assert mod.epochs[2].deme_ids == ("ancestral", )
-
 def test_model_fitting():
-    dict_spec = {"epochs": 3, 
-                 "deme_ids": [("pop1", "pop2"), ("pop1", "pop2"), ("ancestral", )],
-                              "migration": (True, True, False), 
-                              "asym_migration": (True, True, False), 
-                              "migration_direction": (("pop1", "pop2"), ("pop1", "pop2"))}
-    mod = DivergenceModel.from_dict_spec(dict_spec)
+    mod = DivergenceModel()
+    mod.add_epoch(deme_ids=("pop1", "pop2"), migration=True)
+    mod.add_epoch(deme_ids=("pop1_anc", "pop2_anc"), migration=True)
+    mod.add_epoch(deme_ids=("ancestral", ), migration=False)
+
     s1, s2, s3 = [np.ones(10)]*3
     mod.fit(s1, s2, s3, blocklen=500)
 
-    assert len(mod.inferred_params) == 9
+    assert len(mod.inferred_params) == 11

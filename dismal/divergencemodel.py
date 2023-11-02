@@ -302,7 +302,7 @@ class DivergenceModel:
             initial_values=None,
             bounds=None,
             optimisation_methods=None,
-            verbose=True):
+            verbose=False):
         """Estimate parameter values by maximum likelihood.
 
         Args:
@@ -340,7 +340,10 @@ class DivergenceModel:
         
         if verbose is True:
             print_output(self)
-    
+
+        return mod
+
+
     def _add_params_to_epochs(self):
         """Update Epoch objects"""
         thetas_iter = iter(self.thetas_site)
@@ -381,7 +384,8 @@ class DivergenceModel:
             warnings.warn(f"CLAIC could not be calculated", UserWarning)
             cl_akaike = None
         return cl_akaike
-    
+
+
     @staticmethod
     def tally_s_counts(counts):
         s_values = [int(i) for i in Counter(counts).keys()]
