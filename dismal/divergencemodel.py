@@ -341,7 +341,7 @@ class DivergenceModel:
         if verbose is True:
             print_output(self)
 
-        return mod
+        return self
 
 
     def _add_params_to_epochs(self):
