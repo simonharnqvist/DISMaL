@@ -60,6 +60,10 @@ def _transform_eigenvalues_s(s, eigenvalues, start_time, end_time):
                         * np.transpose((pois_start - pois_end)))
 
 
+
+
+
+
 def _state_log_likelihood(QQs, Ps, As, state_idx):
     return np.sum(
         np.log(QQs[0][state_idx, 0:-1]
