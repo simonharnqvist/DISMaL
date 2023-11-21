@@ -8,16 +8,13 @@ class CallSet:
 
     def __init__(self, vcf_path=None, npz_path=None):
 
-        if npz_path is None:
-            self.npz_path = "vcf.npz"
-        else:
-            self.npz_path = npz_path
-
         if vcf_path is None:
             assert npz_path is not None
 
         self.vcf_path = vcf_path
-        if not os.path.exists(self.npz_path):
+        self.npz_path = npz_path
+        if self.vcf_path is None and not os.path.exists(self.npz_path):
+            self.npz_path = "vcf.npz"
             allel.vcf_to_npz(self.vcf_path, self.npz_path,
                               fields=["samples", "calldata/GT", "variants/CHROM", "variants/POS"], overwrite=False)
 
