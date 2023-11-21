@@ -1,8 +1,8 @@
-from dismal.divergencemodel import DivergenceModel
+from dismal.DemographicModel import DemographicModel
 
 def three_epoch_gim():
     """Create three-epoch GIM model (allow migration post-split) using default names"""
-    mod = DivergenceModel(model_ref="3-epoch-GIM")
+    mod = DemographicModel(model_ref="3-epoch-GIM")
     mod.add_epoch(deme_ids=("pop1", "pop2"),
                     migration=True)
     mod.add_epoch(deme_ids=("pop1_anc", "pop2_anc"),
@@ -14,7 +14,7 @@ def three_epoch_gim():
 
 def three_epoch_iim():
     """Create three-epoch isolation-with-initial-migration model (migration only in middle epoch) with default names"""
-    mod = DivergenceModel(model_ref="3-epoch-IIM")
+    mod = DemographicModel(model_ref="3-epoch-IIM")
     mod.add_epoch(deme_ids=("pop1", "pop2"),
                   migration=False)
     mod.add_epoch(deme_ids=("pop1_anc", "pop2_anc"),
@@ -27,7 +27,7 @@ def three_epoch_iim():
 
 def three_epoch_sec():
     """Create three-epoch secondary contact model (migration only in most recent epoch) with default names"""
-    mod = DivergenceModel(model_ref="3-epoch-SEC")
+    mod = DemographicModel(model_ref="3-epoch-SEC")
     mod.add_epoch(deme_ids=("pop1", "pop2"),
                   migration=True)
     mod.add_epoch(deme_ids=("pop1_anc", "pop2_anc"),
@@ -40,7 +40,7 @@ def three_epoch_sec():
 
 def three_epoch_iso():
     """Create three-epoch isolation model (no migration) with default names"""
-    mod = DivergenceModel(model_ref="3-epoch-ISO")
+    mod = DemographicModel(model_ref="3-epoch-ISO")
     mod.add_epoch(deme_ids=("pop1", "pop2"),
                   migration=False)
     mod.add_epoch(deme_ids=("pop1_anc", "pop2_anc"),
@@ -52,7 +52,7 @@ def three_epoch_iso():
 
 
 def from_dict_spec(model_spec):
-    """Generate DivergenceModel object from dictionary specification.
+    """Generate DemographicModel object from dictionary specification.
 
     Args:
         model_spec (dict): Dictionary with keys
@@ -60,7 +60,7 @@ def from_dict_spec(model_spec):
           Example: {"model_ref": "gim_symmetric", "deme_ids": self.deme_ids, "epochs": 3, "migration": (True, True, False), "asym_migration": (False, False, False)}])
 
     Returns:
-        DivergenceModel: Model object with specified settings.
+        DemographicModel: Model object with specified settings.
     """
     deme_ids = model_spec["deme_ids"]
 
@@ -69,7 +69,7 @@ def from_dict_spec(model_spec):
     else:
         model_ref = None
 
-    mod = DivergenceModel(model_ref=model_ref)
+    mod = DemographicModel(model_ref=model_ref)
     mod.deme_ids = deme_ids
 
     for epoch_idx in range(model_spec["epochs"]):

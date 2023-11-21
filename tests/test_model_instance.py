@@ -1,9 +1,7 @@
 import numpy as np
-from dismal.divergencemodel import DivergenceModel
 from dismal.model_instance import ModelInstance
-from dismal.markov_matrices import TransitionRateMatrix, StochasticMatrix
+from dismal.markov_matrices import TransitionRateMatrix
 from dismal.demography import Epoch
-from collections import Counter
 import math
 
 

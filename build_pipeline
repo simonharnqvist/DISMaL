@@ -1,6 +1,7 @@
 #/bin/bash
-rm -r dist
-python -m build
-pip install .
-pytest tests
+rm -r dist &&
+python -m build &&
+pip install . &&
+pytest tests &&
+echo "Build & tests successful"
 #flake8 --extend-ignore=W,F,E501,E303,E226,E202,E203,E251,E302,E231,E261

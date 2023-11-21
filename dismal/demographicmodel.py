@@ -12,7 +12,8 @@ class DemographicModel:
             model_ref (str, optional): Model reference. Defaults to None.
         """
 
-        self.epochs = None
+        self.epochs = []
+        self.deme_ids = []
         self.n_theta_params = 0
         self.n_epoch_durations = -1 # 2 epochs -> 1 duration; 3 epochs -> 2 durations
         self.n_mig_params = 0
@@ -74,8 +75,13 @@ class DemographicModel:
     
     def _negll_wrapper(self, parameter_values, s1, s2, s3):
         """Calculate negative composite log-likelihood"""
-        mod = ModelInstance(parameter_values, self.epochs)
-        return mod.neg_composite_log_likelihood(s1, s2, s3)
+        try:
+            mod = ModelInstance(parameter_values, self.epochs)
+            lnl = mod.neg_composite_log_likelihood(s1, s2, s3)
+        except scipy.linalg.LinAlgError:
+            lnl = np.nan
+
+        return lnl
 
     
     def fit_model(self, s1, s2, s3, initial_values=None, bounds=None, optimisers=None):
