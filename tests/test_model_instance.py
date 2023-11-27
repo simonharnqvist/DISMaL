@@ -6,9 +6,9 @@ import math
 
 
 def test_generate_markov_chain():
-    epochs = [Epoch(deme_ids=["pop1", "pop2"], migration=True),
-              Epoch(deme_ids=["pop1", "pop2"], migration=True),
-              Epoch(deme_ids=["ancestral"], migration=False)]
+    epochs = [Epoch(n_demes=2, deme_ids=["pop1", "pop2"], migration=True),
+              Epoch(n_demes=2, deme_ids=["pop1", "pop2"], migration=True),
+              Epoch(n_demes=1, deme_ids=["ancestral"], migration=False)]
     
     param_vals = np.array([1,1,1,1,1,1,1,0,0,0,0])
     mod = ModelInstance(param_vals, epochs)
@@ -21,9 +21,9 @@ def test_generate_markov_chain():
 
 def test_generate_markov_chain_directional_migration():
     epochs = [
-        Epoch(deme_ids=["pop1", "pop2"], migration=True, asymmetric_migration=True, migration_direction=("pop2", "pop1")),
-        Epoch(deme_ids=["pop1", "pop2"], migration=True, asymmetric_migration=True, migration_direction=("pop1", "pop2")),
-        Epoch(deme_ids=["ancestral"], migration=False)]
+        Epoch(n_demes=2, deme_ids=["pop1", "pop2"], migration=True, asymmetric_migration=True, migration_direction=("pop2", "pop1")),
+        Epoch(n_demes=2, deme_ids=["pop1", "pop2"], migration=True, asymmetric_migration=True, migration_direction=("pop1", "pop2")),
+        Epoch(n_demes=1, deme_ids=["ancestral"], migration=False)]
 
     param_vals = np.array([1, 1, 1, 1, 1, 1, 1, 0.5, 0.25])
     mod = ModelInstance(param_vals, epochs)
@@ -55,9 +55,9 @@ def test_transform_eigenvalues_s():
 def test_pr_s_state1():
 
     epochs = [
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1",), migration=False)]
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=1, deme_ids=("pop1",), migration=False)]
     
     mod = ModelInstance([1,1,1,1,1,1,1], epochs)
 
@@ -70,9 +70,9 @@ def test_pr_s_state1():
 def test_pr_s_state3():
 
     epochs = [
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1",), migration=False)]
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=1, deme_ids=("pop1",), migration=False)]
     
     mod = ModelInstance([1,1,1,1,1,1,1], epochs)
 
@@ -87,9 +87,9 @@ def test_log_likelihood():
     s1, s2, s3 = np.array([1000]), np.array([1000]), np.array([1000])
        
     epochs = [
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1",), migration=False)]
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=1, deme_ids=("pop1",), migration=False)]
     
     mod = ModelInstance([1,1,1,1,1,1,1], epochs)
 
@@ -99,9 +99,9 @@ def test_log_likelihood():
 
 def test_log_likelihood_with_mig():
     epochs = [
-        Epoch(deme_ids=("pop1", "pop2"), migration=True),
-        Epoch(deme_ids=("pop1", "pop2"), migration=True),
-        Epoch(deme_ids=("pop1",), migration=False)]
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=True),
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=True),
+        Epoch(n_demes=1, deme_ids=("pop1",), migration=False)]
     
     mod = ModelInstance([1,1,1,1,1,1,1,1,1,1,1], epochs)
 
@@ -114,9 +114,9 @@ def test_log_likelihood_with_mig():
 
 def test_log_likelihood_with_simple_large_number_no_mig():
     epochs = [
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1", "pop2"), migration=False),
-        Epoch(deme_ids=("pop1",), migration=False)]
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=2, deme_ids=("pop1", "pop2"), migration=False),
+        Epoch(n_demes=1, deme_ids=("pop1",), migration=False)]
     
     mod = ModelInstance([1,1,1,1,1,1,1], epochs)
     

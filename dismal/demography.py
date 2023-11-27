@@ -1,18 +1,33 @@
+import secrets
 
 class Epoch:
 
     def __init__(self, 
-                 deme_ids,
                  migration,
+                 n_demes=2,
+                 deme_ids = None,
                  asymmetric_migration=True,
                  migration_direction=None,
                  migration_rates = None,
                  thetas = None,
                  start_time=None,
                  end_time=None):
+        
+        assert n_demes in [1,2], "n_demes must be either 1 or 2; multideme epochs not supported"
+        self.n_demes = n_demes
+
+        if migration_direction is not None:
+            assert deme_ids is not None, "Demes must have unique IDs if migration_direction=True"
 
         self.deme_ids = deme_ids
-        self.n_thetas = len(deme_ids)
+        if self.deme_ids is None:
+            # if names are not provided, assign unique ID
+            pop1_name, pop2_name = f"pop1_{secrets.token_hex(5)}", f"pop2_{secrets.token_hex(5)}"
+            self.deme_ids = (pop1_name, pop2_name)[0:n_demes]
+        else:
+            assert len(deme_ids) == self.n_demes, f"Got {len(deme_ids)} deme IDs, but n_demes={self.n_demes}"
+
+        self.n_thetas = self.n_demes
 
         assert (isinstance(migration, list) and isinstance(migration[0], bool)) \
             or isinstance(migration, bool), "migration argument must be bool or list of bools"

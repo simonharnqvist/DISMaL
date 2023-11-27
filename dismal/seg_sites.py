@@ -1,4 +1,4 @@
-from dismal.block import Block
+from dismal.blockgt import BlockGT
 from dismal.blocks import gff3_to_blocks
 from dismal.callset import CallSet
 from collections import Counter
@@ -9,6 +9,7 @@ import pandas as pd
 class SegregatingSitesSpectrum:
 
     def __init__(self, blocks_df, callset, samples_map):
+        self.chromosomes = list(blocks_df["chr"])
         self.block_starts = list(blocks_df["start"])
         self.block_ends = list(blocks_df["end"])
         self.block_lengths = list(blocks_df["end"]-blocks_df["start"])
@@ -19,9 +20,17 @@ class SegregatingSitesSpectrum:
         self.pop2_samples = samples_map.iloc[:,0][samples_map.iloc[:, 1] == self.pop2]
         
 
-        self.blocks = [Block(callset, start_idx, blocklen=(end_idx-start_idx), 
-                             pop1_samples=self.pop1_samples, pop2_samples=self.pop2_samples)
-                             for (start_idx, end_idx) in tqdm.tqdm(list(zip(self.block_starts, self.block_ends)))]
+        block_gt_arrs = [callset.gt[np.where((callset.chromosomes == chromosome) 
+                                             & (callset.pos >= start) 
+                                             & (callset.pos <= end))] for (chromosome, start, end) 
+            in tqdm.tqdm(list(zip(self.chromosomes, self.block_starts, self.block_ends)))]
+        
+        self.block_gts = [
+            BlockGT(arr, 
+                    callset_samples=callset.samples, 
+                    pop1_samples=self.pop1_samples, 
+                    pop2_samples=self.pop2_samples) for arr in block_gt_arrs
+        ]
         
         self.s1, self.s2, self.s3 = self.seg_sites_distr()
 
@@ -31,9 +40,9 @@ class SegregatingSitesSpectrum:
 
         seg_sites_spec = []
 
-        s1_counter = Counter([item for sublist in [block.s1 for block in self.blocks] for item in sublist]) 
-        s2_counter = Counter([item for sublist in [block.s2 for block in self.blocks] for item in sublist])
-        s3_counter = Counter([item for sublist in [block.s3 for block in self.blocks] for item in sublist])
+        s1_counter = Counter([item for sublist in [block.s1 for block in self.block_gts] for item in sublist]) 
+        s2_counter = Counter([item for sublist in [block.s2 for block in self.block_gts] for item in sublist])
+        s3_counter = Counter([item for sublist in [block.s3 for block in self.block_gts] for item in sublist])
 
         for s_counter in [s1_counter, s2_counter, s3_counter]:
             s_max = max(s_counter.keys()) + 1
@@ -45,15 +54,19 @@ class SegregatingSitesSpectrum:
     
     
     @staticmethod
-    def from_vcf_gff3(vcf_path, 
-                      gff3_path, 
+    def from_vcf_gff3(gff3_path,
                       samples_map_path, 
                       blocklen,
                       min_block_distance,
+                      vcf_path=None, 
                       vcf_npz_path=None, 
                       blocks_parquet_path=None, 
                       out_npz_path=None,
-                      genomic_partition="intron"):
+                      select_chromosomes=None,
+                      exclude_chromosomes=None,
+                      genomic_partition="intron",
+                      trim_starts=10,
+                      trim_ends=10):
         """Create SegregatingSitesSpectrum from VCF and GFF3 files.
 
         Args:
@@ -70,11 +83,17 @@ class SegregatingSitesSpectrum:
         Returns: SegregatingSitesSpectrum object
         """
 
+        if vcf_path is None:
+            assert vcf_npz_path is not None, "Please provide either VCF or NPZ"
+
         print("Making blocks from GFF3...")
         blocks_df = gff3_to_blocks(gff3_path=gff3_path, 
                                    blocklen=blocklen, 
                                    min_block_distance=min_block_distance, 
                                    genomic_partition=genomic_partition, 
+                                   select_chromosomes=select_chromosomes, 
+                                   exclude_chromosomes=exclude_chromosomes,
+                                   trim_starts=trim_starts, trim_ends=trim_ends,
                                    parquet_path=blocks_parquet_path)
         
         print("Reading VCF to CallSet...")

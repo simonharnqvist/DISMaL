@@ -3,10 +3,11 @@ from collections import Counter
 from scipy.stats import poisson
 from functools import reduce
 import warnings
-from iclik import inform_crit
 from dismal.markov_matrices import StochasticMatrix, TransitionRateMatrix
 from dismal.demography import Epoch
 from dismal.print_results import print_output
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class ModelInstance:
@@ -52,6 +53,7 @@ class ModelInstance:
         self.negll = None
         self.claic = None
 
+
     def _check_parameter_values(self):
         expected_n_params = self.n_theta_params + self.n_epoch_durations + self.n_mig_params
         assert len(self.param_vals) == expected_n_params, f"""Wrong number of parameters -- expected {expected_n_params} parameters:
@@ -74,6 +76,7 @@ class ModelInstance:
 
         for epoch_idx, epoch in enumerate(self.epoch_templates):
             updated_epoch = Epoch(
+                n_demes=epoch.n_demes,
                 deme_ids=epoch.deme_ids,
                 migration=epoch.migration,
                 asymmetric_migration=epoch.asymmetric_migration,
@@ -225,17 +228,17 @@ class ModelInstance:
         return ps_array
     
 
-    def expected_s1(self, s_max=40, neglog=False):
+    def expected_s1(self, s_max, neglog=False):
         """Convenience function for S1 distribution"""
         return self.pr_s(s_max, state=1, neglog=neglog)
     
 
-    def expected_s2(self, s_max=40, neglog=False):
+    def expected_s2(self, s_max, neglog=False):
         """Convenience function for S2 distribution"""
         return self.pr_s(s_max, state=2, neglog=neglog)
     
 
-    def expected_s3(self, s_max=40, neglog=False):
+    def expected_s3(self, s_max, neglog=False):
         """Convenience function for S3 distribution"""
         return self.pr_s(s_max, state=3, neglog=neglog)
     
@@ -259,36 +262,6 @@ class ModelInstance:
         self.negll = lnl
     
         return lnl
-    
-
-    def claic(self, s1=None, s2=None, s3=None):
-        """Calculate Composite likelihood AIC."""
-        
-        if s1 is None:
-            assert self.obs_s1 is not None, "Please specify an s-distribution"
-            s1 = self.obs_s1
-
-        if s2 is None:
-            assert self.obs_s2 is not None, "Please specify an s-distribution"
-            s1 = self.obs_s2
-
-        if s3 is None:
-            assert self.obs_s3 is not None, "Please specify an s-distribution"
-            s3 = self.obs_s3
-        
-        
-        def _logl_wrapper(params):
-            return self.neg_composite_log_likelihood(params, s1, s2, s3)
-        
-        try:
-            cl_akaike = inform_crit.claic(_logl_wrapper, self.inferred_params)
-        except Exception:
-            warnings.warn(f"CLAIC could not be calculated", UserWarning)
-            cl_akaike = None
-
-        self.claic = cl_akaike
-    
-        return cl_akaike
 
 
 

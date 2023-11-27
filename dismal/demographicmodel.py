@@ -12,19 +12,23 @@ class DemographicModel:
             model_ref (str, optional): Model reference. Defaults to None.
         """
 
+        self.model_ref = model_ref
         self.epochs = []
         self.deme_ids = []
         self.n_theta_params = 0
         self.n_epoch_durations = -1 # 2 epochs -> 1 duration; 3 epochs -> 2 durations
         self.n_mig_params = 0
 
+        self.modelinstance = None
         self.negll = None
         self.claic = None
+        self.inferred_params = None
 
 
     def add_epoch(self,
-                  deme_ids,
+                  n_demes,
                   migration,
+                  deme_ids=None,
                   asymmetric_migration=True,
                   migration_direction=None):
         """Add epoch (period of isolation/gene flow).
@@ -39,6 +43,7 @@ class DemographicModel:
         """
         
         epoch = Epoch(
+            n_demes=n_demes,
             deme_ids=deme_ids,
             migration=migration,
             asymmetric_migration=asymmetric_migration,
@@ -46,10 +51,12 @@ class DemographicModel:
         )
 
         self.epochs.append(epoch)
-        self.deme_ids.append(deme_ids)
-        self.n_theta_params = self.n_theta_params + len(deme_ids)
+        self.deme_ids.append(epoch.deme_ids)
+        assert len(self.deme_ids) == len(set(self.deme_ids)), f"Deme IDs must be unique across model; found repeated values in {self.deme_ids} "
+        self.n_theta_params = self.n_theta_params + epoch.n_demes
         self.n_epoch_durations = self.n_epoch_durations + 1
         self.n_mig_params = self.n_mig_params + epoch.n_mig_params
+        self.n_params = self.n_theta_params + self.n_epoch_durations + self.n_mig_params
 
     
     def _get_initial_values(self, theta_iv=1, epoch_duration_iv=1, mig_iv=0):
@@ -63,9 +70,9 @@ class DemographicModel:
         return thetas_iv + epoch_duration_iv + mig_iv
     
 
-    def _get_bounds(self, theta_bounds=(0.1, None), 
-                    epoch_duration_bounds=(0.01, None), 
-                    mig_bounds=(None, None)):
+    def _get_bounds(self, theta_bounds=(1e-10, None), 
+                    epoch_duration_bounds=(1e-10, None), 
+                    mig_bounds=(0, None)):
         """Generate list of (lower, upper) bound tuples for parameter estimation"""
         thetas_bounds = [theta_bounds] * self.n_theta_params
         epoch_durations_bounds = [epoch_duration_bounds] * self.n_epoch_durations
@@ -79,6 +86,8 @@ class DemographicModel:
             mod = ModelInstance(parameter_values, self.epochs)
             lnl = mod.neg_composite_log_likelihood(s1, s2, s3)
         except scipy.linalg.LinAlgError:
+            lnl = np.nan
+        except ValueError:
             lnl = np.nan
 
         return lnl
@@ -114,5 +123,25 @@ class DemographicModel:
 
         assert optimised.success, f"Optimisers {opt_algos} all failed to maximise the likelihood"
 
-        return ModelInstance(optimised.x, self.epochs)
+        self.modelinstance = ModelInstance(optimised.x, self.epochs)
+        self.negll = optimised.fun
+        self.claic = self.cl_akaike(optimised)
+        self.inferred_params = optimised.x
+
+        self.epochs = self.modelinstance.epochs
+
+        return self
+
+    
+    def cl_akaike(self, optim_obj):
+        """Calculate composite likelihood AIC from SciPy optimisation object"""
+        if hasattr(optim_obj, "jac") and hasattr(optim_obj, "hess_inv"):
+            if optim_obj.jac is not None and optim_obj.hess_inv is not None:
+                claic = (2*optim_obj.fun 
+                        + np.sum(optim_obj.hess_inv.matvec(optim_obj.jac))) # NB sum equiv to trace(diag)
+        else:
+            claic = None
+        
+        return claic
+
     

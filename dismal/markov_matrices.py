@@ -1,6 +1,9 @@
 import numpy as np
 from scipy import linalg
 import math
+import warnings
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 class TransitionRateMatrix:
 
@@ -82,12 +85,14 @@ class TransitionRateMatrix:
 
     def eigen(self):
         """Calculate the eigenvalues and left eigenvectors of the generator matrix."""
-        t = self.transpose() # left eigenvects = right eigenvects of transposed matrix
-        eigenvals, eigenvects = linalg.eig(t)
+        eigenvals, eigenvects = linalg.eig(self.transpose())
         sorted_indices = np.argsort(eigenvals)
         eigenvals = eigenvals[sorted_indices]
         eigenvects = eigenvects[:, sorted_indices]
-        return np.real(eigenvects.T), np.real(eigenvals)
+        v, d = np.real(eigenvects.T), np.real(eigenvals)
+        
+        return v,d
+        
 
 class StochasticMatrix:
     
