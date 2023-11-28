@@ -8,18 +8,27 @@ import pandas as pd
 
 class SegregatingSitesSpectrum:
 
-    def __init__(self, blocks_df, callset, samples_map):
+    def __init__(self, blocks_df, callset, samples_map, s1_deme=None, s2_deme=None):
         self.chromosomes = list(blocks_df["chr"])
         self.block_starts = list(blocks_df["start"])
         self.block_ends = list(blocks_df["end"])
         self.block_lengths = list(blocks_df["end"]-blocks_df["start"])
 
-        self.pop1 = samples_map.iloc[:, 1].unique()[0]
-        self.pop2 = samples_map.iloc[:, 1].unique()[1]
+        if s1_deme is None:
+            self.pop1 = samples_map.iloc[:, 1].unique()[0]
+        else:
+            assert s1_deme in list(samples_map.iloc[:, 1].unique())
+            self.pop1 = s1_deme
+
+        if s2_deme is None:
+            self.pop2 = samples_map.iloc[:, 1].unique()[1]
+        else:
+            assert s2_deme in list(samples_map.iloc[:, 1].unique())
+            self.pop2 = s2_deme
+
         self.pop1_samples = samples_map.iloc[:,0][samples_map.iloc[:, 1] == self.pop1]
         self.pop2_samples = samples_map.iloc[:,0][samples_map.iloc[:, 1] == self.pop2]
         
-
         block_gt_arrs = [callset.gt[np.where((callset.chromosomes == chromosome) 
                                              & (callset.pos >= start) 
                                              & (callset.pos <= end))] for (chromosome, start, end) 
@@ -95,6 +104,8 @@ class SegregatingSitesSpectrum:
                                    exclude_chromosomes=exclude_chromosomes,
                                    trim_starts=trim_starts, trim_ends=trim_ends,
                                    parquet_path=blocks_parquet_path)
+        
+        print(f"Generated {len(blocks_df)} blocks")
         
         print("Reading VCF to CallSet...")
         callset = CallSet(vcf_path=vcf_path, npz_path=vcf_npz_path)

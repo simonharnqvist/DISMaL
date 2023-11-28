@@ -2,6 +2,7 @@ import numpy as np
 import scipy
 from dismal.demography import Epoch
 from dismal.model_instance import ModelInstance
+from dismal.demesrepresentation import DemesRepresentation
 
 class DemographicModel:
 
@@ -144,4 +145,19 @@ class DemographicModel:
         
         return claic
 
-    
+
+    def demes_format(self, mutation_rate):
+        """Represent model in Demes format"""
+        demes_rep = DemesRepresentation(self, mutation_rate=mutation_rate)
+        self.demes_representation = demes_rep
+        return demes_rep
+
+
+    def demesdraw(self, mutation_rate):
+        """Draw Demes model; convenience function for demes_format().drawing"""
+        return self.demes_format(mutation_rate=mutation_rate).drawing
+
+
+    def demesgraph(self, mutation_rate):
+        """Return Demes graph; convenience function for demes_format().graph"""
+        return self.demes_format(mutation_rate=mutation_rate).graph

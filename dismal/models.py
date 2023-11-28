@@ -1,27 +1,30 @@
 from dismal.demographicmodel import DemographicModel
 
-def iso_two_epoch():
+def iso_two_epoch(sampled_deme_names=None):
     mod = DemographicModel(model_ref="2-epoch-ISO")
     mod.add_epoch(n_demes=2,
+                    deme_ids=sampled_deme_names,
                     migration=False)
     mod.add_epoch(n_demes=1,
                     migration=False)
     
     return mod
 
-def im():
+def im(sampled_deme_names=None):
     mod = DemographicModel(model_ref="2-epoch-IM")
     mod.add_epoch(n_demes=2,
+                    deme_ids=sampled_deme_names,
                     migration=True)
     mod.add_epoch(n_demes=1,
                     migration=False)
     
     return mod
 
-def gim():
+def gim(sampled_deme_names=None):
     """Create three-epoch GIM model (allow migration post-split) using default names"""
     mod = DemographicModel(model_ref="3-epoch-GIM")
     mod.add_epoch(n_demes=2,
+                    deme_ids=sampled_deme_names,
                     migration=True)
     mod.add_epoch(n_demes=2,
                     migration=True)
@@ -30,10 +33,11 @@ def gim():
         
     return mod
 
-def iim():
+def iim(sampled_deme_names=None):
     """Create three-epoch isolation-with-initial-migration model (migration only in middle epoch) with default names"""
     mod = DemographicModel(model_ref="3-epoch-IIM")
     mod.add_epoch(n_demes=2,
+                  deme_ids=sampled_deme_names,
                   migration=False)
     mod.add_epoch(n_demes=2,
                   migration=True)
@@ -43,10 +47,11 @@ def iim():
     return mod
     
 
-def secondary_contact():
+def secondary_contact(sampled_deme_names=None):
     """Create three-epoch secondary contact model (migration only in most recent epoch) with default names"""
     mod = DemographicModel(model_ref="3-epoch-SEC")
     mod.add_epoch(n_demes=2,
+                  deme_ids=sampled_deme_names,
                   migration=True)
     mod.add_epoch(n_demes=2,
                   migration=False)
@@ -56,10 +61,11 @@ def secondary_contact():
     return mod
     
 
-def iso_three_epoch():
+def iso_three_epoch(sampled_deme_names=None):
     """Create three-epoch isolation model (no migration) with default names"""
     mod = DemographicModel(model_ref="3-epoch-ISO")
     mod.add_epoch(n_demes=2,
+                  deme_ids=sampled_deme_names,
                   migration=False)
     mod.add_epoch(n_demes=2,
                   migration=False)
