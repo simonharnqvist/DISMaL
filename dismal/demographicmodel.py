@@ -24,6 +24,10 @@ class DemographicModel:
         self.negll = None
         self.claic = None
         self.inferred_params = None
+        self.optim_object = None
+        self.stderr = None
+
+        self.demes_representation = None
 
 
     def add_epoch(self,
@@ -127,7 +131,9 @@ class DemographicModel:
         self.modelinstance = ModelInstance(optimised.x, self.epochs)
         self.negll = optimised.fun
         self.claic = self.cl_akaike(optimised)
+        self.stderr = self.standard_err(optimised)
         self.inferred_params = optimised.x
+        self.optim_object = optimised
 
         self.epochs = self.modelinstance.epochs
 
@@ -144,20 +150,34 @@ class DemographicModel:
             claic = None
         
         return claic
+    
+    def standard_err(self, optim_obj):
+        if hasattr(optim_obj, "hess_inv"):
+            stderr = np.sqrt(np.diag(optim_obj.hess_inv.todense()))
+        else:
+            stderr = None
+        
+        return stderr
 
 
-    def demes_format(self, mutation_rate):
+    def demes_format(self, mutation_rate, blocklen):
         """Represent model in Demes format"""
-        demes_rep = DemesRepresentation(self, mutation_rate=mutation_rate)
+        demes_rep = DemesRepresentation(self, mutation_rate=mutation_rate, blocklen=blocklen)
         self.demes_representation = demes_rep
         return demes_rep
 
 
-    def demesdraw(self, mutation_rate):
+    def demesdraw(self, mutation_rate=None, blocklen=None):
         """Draw Demes model; convenience function for demes_format().drawing"""
-        return self.demes_format(mutation_rate=mutation_rate).drawing
+        if self.demes_representation is None:
+            self.demes_representation = self.demes_format(mutation_rate=mutation_rate, blocklen=blocklen)
+
+        return self.demes_representation.drawing
 
 
-    def demesgraph(self, mutation_rate):
+    def demesgraph(self, mutation_rate=None, blocklen=None):
         """Return Demes graph; convenience function for demes_format().graph"""
-        return self.demes_format(mutation_rate=mutation_rate).graph
+        if self.demes_representation is None:
+            self.demes_representation = self.demes_format(mutation_rate=mutation_rate, blocklen=blocklen)
+
+        return self.demes_representation.graph
