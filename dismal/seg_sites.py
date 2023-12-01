@@ -5,6 +5,8 @@ from collections import Counter
 import numpy as np
 import tqdm
 import pandas as pd
+import seaborn as sns
+import warnings
 
 class SegregatingSitesSpectrum:
 
@@ -42,6 +44,8 @@ class SegregatingSitesSpectrum:
         ]
         
         self.s1, self.s2, self.s3 = self.seg_sites_distr()
+
+        self.visualisation = self.visualise_sdistr(self.s1, self.s2, self.s3)
 
 
     def seg_sites_distr(self):
@@ -121,3 +125,23 @@ class SegregatingSitesSpectrum:
                      s3=seg_sites_spec.s3)
             
         return seg_sites_spec
+    
+    @staticmethod
+    def visualise_sdistr(s1, s2, s3):
+        """Visualise s distributions"""
+        sdistr_df = pd.concat([pd.DataFrame(list(zip([sdist_name]*len(sdist), 
+                                          [i for i in range(len(sdist))], 
+                                          sdist)), columns=["distr", "s", "count"]) 
+                                          for (sdist, sdist_name) in list(zip([s1, s2, s3], ["s1", "s2", "s3"]))])
+    
+        warnings.simplefilter(action='ignore', category=FutureWarning)
+        g = sns.FacetGrid(data=sdistr_df, col="distr", sharex=False, sharey=False)
+        g.map(sns.barplot, "s", "count")
+        g.fig.text(x=0.15, y=1, s="s1 (within species 1)", fontsize=10, fontstyle="italic")
+        g.fig.text(x=0.45, y=1, s="s2 (within species 2)", fontsize=10, fontstyle="italic")
+        g.fig.text(x=0.75, y=1, s="s3 (between species)", fontsize=10)
+        g.set_xticklabels(rotation=90)
+        max_s = len(s3)
+        g.set(xticks=np.arange(0, max_s, 5))
+
+        return g
