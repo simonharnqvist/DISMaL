@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+from scipy.special import rel_entr
 from dismal.demography import Epoch
 from dismal.model_instance import ModelInstance
 from dismal.demesrepresentation import DemesRepresentation
@@ -181,3 +182,47 @@ class DemographicModel:
             self.demes_representation = self.demes_format(mutation_rate=mutation_rate, blocklen=blocklen)
 
         return self.demes_representation.graph
+    
+
+    def kldiv_fitted_true(self, true_modinst, s_max=500):
+        """Evaluate model fit (KL-divergence) against specified parameter set ModelInstance"""
+
+        assert isinstance(true_modinst, ModelInstance)
+
+        true_sdists = [true_modinst.expected_s1(s_max=s_max),
+                       true_modinst.expected_s2(s_max=s_max),
+                       true_modinst.expected_s3(s_max=s_max)]
+        
+        scaled_true = [dist/np.sum(dist) for dist in true_sdists]
+        
+        fitted_sdists = [self.modelinstance.expected_s1(s_max=s_max),
+                         self.modelinstance.expected_s2(s_max=s_max),
+                         self.modelinstance.expected_s3(s_max=s_max)]
+        
+        scaled_fitted = [dist/np.sum(dist) for dist in fitted_sdists]
+        
+        kldiv = np.sum([rel_entr(fitted, true) for (fitted, true) 
+                          in list(zip(scaled_fitted, scaled_true))])
+        
+        return kldiv
+
+
+    def kldiv_fitted_observed(self):
+        """Evaluate model fit (KL-divergence) against observed data"""
+
+        observed_sdists = [self.modelinstance.obs_s1, self.modelinstance.obs_s2, self.modelinstance.obs_s3]
+        scaled_observed = [dist/np.sum(dist) for dist in observed_sdists]
+        
+        fitted_sdists = [self.modelinstance.expected_s1(s_max=len(observed_sdists[0])),
+                         self.modelinstance.expected_s2(s_max=len(observed_sdists[1])),
+                         self.modelinstance.expected_s3(s_max=len(observed_sdists[2]))]
+        
+        scaled_fitted = [dist/np.sum(dist) for dist in fitted_sdists]
+        
+        kldiv = np.sum([rel_entr(fitted, obs) for (fitted, obs) 
+                          in list(zip(fitted_sdists, observed_sdists))])
+        
+        return kldiv
+        
+
+

@@ -1,34 +1,26 @@
 import pytest
 import numpy as np
 from numpy.testing import assert_allclose
-from dismal.simulate import DemographySimulation
+from dismal.model_instance import ModelInstance
+from dismal.models import gim
 
 @pytest.fixture()
 def setup_simulation():
-    return DemographySimulation(
-        block_thetas=[3,2,4,3,6],
-        epoch_durations=[2,1],
-        migration_rates=[0.3, 0.2, 0.2, 0.3],
-        blocks_per_state = 100
-    )
-
-
-def test_site_theta(setup_simulation):
-    assert_allclose(setup_simulation.site_theta, np.array(
-          [0.006, 0.004, 0.008, 0.006, 0.012]))
-
+    epochs = gim().epochs
+    modinst = ModelInstance([3, 2, 4, 3, 6, 2, 1, 0.3, 0.2, 0.2, 0.3], epochs)
+    sim = modinst.simulate(mutation_rate=5e-9, blocklen=200, recombination_rate=0, blocks_per_state=100)
+    return sim.demography
 
 def test_deme_sizes(setup_simulation):
-    mutation_rate = 1e-9
-    assert_allclose(setup_simulation.deme_sizes,
-                    np.array([0.006, 0.004, 0.008, 0.006, 0.012]) / (4 * mutation_rate)) 
-        
+    popsizes = [setup_simulation.populations[i].initial_size 
+                for i in range(0, len(setup_simulation.populations))]
+    assert_allclose(popsizes, np.array(
+          [7.5e5, 5e5, 1e6, 7.5e5, 1.5e6]))
 
-def test_epoch_durations_generations(setup_simulation):
-    assert_allclose(setup_simulation.epoch_durations_generations,
-                    np.array([4_000_000, 2_000_000]))
-    
 
 def test_split_times_generations(setup_simulation):
-    assert_allclose(setup_simulation.split_times_generations,
-                    np.array([4_000_000, 6_000_000]))
+    times = sorted(list(set([setup_simulation.events[i].time 
+                             for i in range(0, len(setup_simulation.events))])))
+
+    assert_allclose(times,
+                    np.array([4e6, 6e6]))

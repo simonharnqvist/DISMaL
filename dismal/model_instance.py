@@ -6,6 +6,7 @@ import warnings
 from dismal.markov_matrices import StochasticMatrix, TransitionRateMatrix
 from dismal.demography import Epoch
 from dismal.print_results import print_output
+from dismal.modelsimulation import ModelSimulation
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -262,6 +263,10 @@ class ModelInstance:
         self.negll = lnl
     
         return lnl
+    
+    def simulate(self, mutation_rate, blocklen, recombination_rate=0, blocks_per_state=20_000):
+        return ModelSimulation(self, mutation_rate, blocklen, 
+                               recombination_rate, blocks_per_state)
 
 
 
