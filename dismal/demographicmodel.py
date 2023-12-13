@@ -4,6 +4,7 @@ from scipy.special import rel_entr
 from dismal.demography import Epoch
 from dismal.model_instance import ModelInstance
 from dismal.demesrepresentation import DemesRepresentation
+import warnings
 
 class DemographicModel:
 
@@ -65,7 +66,7 @@ class DemographicModel:
         self.n_params = self.n_theta_params + self.n_epoch_durations + self.n_mig_params
 
     
-    def _get_initial_values(self, theta_iv=1, epoch_duration_iv=1, mig_iv=0):
+    def _get_initial_values(self, theta_iv=1, epoch_duration_iv=1, mig_iv=1e-5):
         """Generate list of initial values for parameter estimation"""
 
         assert len(self.epochs) > 1, "Number of epochs must be at least two; add epochs with add_epochs() method"
@@ -76,9 +77,9 @@ class DemographicModel:
         return thetas_iv + epoch_duration_iv + mig_iv
     
 
-    def _get_bounds(self, theta_bounds=(1e-10, None), 
-                    epoch_duration_bounds=(1e-10, None), 
-                    mig_bounds=(0, None)):
+    def _get_bounds(self, theta_bounds=(1e-3, None), 
+                    epoch_duration_bounds=(1e-3, None), 
+                    mig_bounds=(1e-5, None)):
         """Generate list of (lower, upper) bound tuples for parameter estimation"""
         thetas_bounds = [theta_bounds] * self.n_theta_params
         epoch_durations_bounds = [epoch_duration_bounds] * self.n_epoch_durations
@@ -139,6 +140,30 @@ class DemographicModel:
         self.epochs = self.modelinstance.epochs
 
         return self
+    
+    def bounds_warnings(self):
+
+        thetas = self.inferred_params[0:self.n_theta_params]
+        if any(thetas <= 1e-3):
+            warnings.warn("One or more of your theta values is at the lower bound. Consider increasing the blocklength. Interpret results with great caution.")
+        if any(thetas >= 20):
+            warnings.warn("One or more of your theta values is much greater than expected. Consider decreasing the block length. Interpret results with great caution.")
+
+        epoch_durations = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_epoch_durations)]
+        if any(epoch_durations <= 1e-3):
+            warnings.warn("One or more of your epoch duration values is at the lower bound. Interpret results with great caution.")
+        if any(epoch_durations > 20):
+            warnings.warn("One or more of your epoch duration values is much greater than expected. Interpret results with great caution.")
+
+        if self.n_mig_params > 0:
+            mig_rates = self.inferred_params[(self.n_theta_params+self.n_epoch_durations):]
+            
+            if any(mig_rates <= 1e-5):
+                warnings.warn("One or more of your migration rates is at the lower bound. Interpret results with great caution.")
+            if any(mig_rates > 20):
+                warnings.warn("One or more of your migration rates is much greater than expected. Interpret results with great caution.")
+        
+
 
     
     def cl_akaike(self, optim_obj):
