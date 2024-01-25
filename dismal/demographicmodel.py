@@ -109,7 +109,7 @@ class DemographicModel:
             bounds = self._get_bounds()
         
         if optimisers is None:
-            opt_algos = ["L-BFGS-B", "Nelder-Mead", "Powell"]
+            opt_algos = ["L-BFGS-B", "Nelder-Mead"]
         else:
             opt_algos = list(optimisers)
         
