@@ -1,5 +1,5 @@
 #/bin/bash
-rm -r dist &&
+rm -rf dist &&
 python -m build &&
 pip install . &&
 pytest tests &&

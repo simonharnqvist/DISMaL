@@ -18,10 +18,10 @@ class ModelSimulation:
                                for i in range(1, len(self.Ne_epoch_durations)+1)]
 
         self.demography = self.generate_demography()
-        self.sampled_deme_ids = [self.demography.populations[0].name, self.demography.populations[1].name]
+        self.sampled_deme_ids = [self.demography.populations[-2].name, self.demography.populations[-1].name]
 
         self.tree_sequences = self.create_treesequences()
-        self.s1_counts, self.s2_counts, self.s3_counts = [self.add_mutations(ts) for ts in self.tree_sequences]
+        self.s1_counts, self.s2_counts, self.s3_counts = [self.simulate_seg_sites(ts) for ts in self.tree_sequences]
         self.s1, self.s2, self.s3 = self.seg_sites_distr()
 
     def add_populations(self, demography):
@@ -108,7 +108,7 @@ class ModelSimulation:
         return ts_state1, ts_state2, ts_state3
 
 
-    def add_mutations(self, ts):
+    def simulate_seg_sites(self, ts):
         ts_muts = [msprime.sim_mutations(treeseq, rate=self.mu, discrete_genome=False) for treeseq in ts]
         s = np.array([ts_mut.divergence(sample_sets=[[0], [2]], span_normalise=False) for ts_mut in ts_muts])
             

@@ -264,10 +264,11 @@ class ModelInstance:
     
         return lnl
     
-    def simulate(self, mutation_rate, blocklen, recombination_rate=0, blocks_per_state=20_000):
-        return ModelSimulation(self, mutation_rate, blocklen, 
-                               recombination_rate, blocks_per_state)
-
+    def simulate(self, mutation_rate, blocklen, recombination_rate, blocks_per_state):
+        return ModelSimulation(self, mutation_rate=mutation_rate, 
+                        blocklen=blocklen, 
+                        recombination_rate=recombination_rate,
+                        blocks_per_state=blocks_per_state)
 
 
 
