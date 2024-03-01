@@ -4,6 +4,41 @@ import itertools
 import pandas as pd
 import tqdm
 import numpy as np
+import csv
+from collections import Counter
+import allel
+
+np.set_printoptions(suppress=True)
+
+def sample_map_to_sample_idxs(sample_map, callset):
+    """Get VCF indices per population."""
+    if type(sample_map) is str:
+        with open(sample_map, mode='r') as infile:
+            reader = csv.reader(infile)
+            sample_map = {row[0]:row[1] for row in reader}
+    
+    assert type(sample_map) is dict
+    pops = np.unique(list(sample_map.values()))
+    pop1_idxs = np.where([sample_map.get(sample) == pops[0] for sample in callset.samples])[0]
+    pop2_idxs = np.where([sample_map.get(sample) == pops[1] for sample in callset.samples])[0]
+
+    return pop1_idxs, pop2_idxs
+
+def estimate_dxy(callset, sample_map):
+    """Estimate dxy from first chromosome in CallSet"""
+
+    pop1_idxs, pop2_idxs = sample_map_to_sample_idxs(sample_map, callset)
+    chrom = np.unique(callset.chromosomes)[0]
+    calls = callset.gt[callset.chromosomes == chrom]
+    pos = callset.pos[callset.chromosomes == chrom]
+    pop1_ac = allel.GenotypeArray(calls[:, pop1_idxs, :]).count_alleles()   
+    pop2_ac = allel.GenotypeArray(calls[:, pop2_idxs, :]).count_alleles()
+
+    return allel.sequence_divergence(pos, pop1_ac, pop2_ac)
+
+def blocklen_from_dxy(dxy, numerator=3):
+    """Rule of thumb estimation of block length from dxy"""
+    return round(numerator/dxy)
 
 def get_callable_per_sample(callable):
     """Make PyRanges/BED of callable regions for each sample from mosdepth type PyRanges."""
@@ -166,10 +201,64 @@ def blockwise_seg_sites(blocks, callset):
     Returns:
         _type_: _description_
     """
-    return blocks.df.apply(lambda row: num_seg_sites(callset, 0, row[1], row[2], row[3], row[4]), 
+    return blocks.df.apply(lambda row: num_seg_sites(callset, 0, row.iloc[1], row.iloc[2], row.iloc[3], row.iloc[4]), 
              axis=1)
 
     
+def determine_state(sample1, sample2, sample_map):
+    """Assign Markov chain states to each sampled block."""
 
+    if type(sample_map) is str:
+        with open(sample_map, mode='r') as infile:
+            reader = csv.reader(infile)
+            sample_map = {row[0]:row[1] for row in reader}
     
+    assert type(sample_map) is dict
+
+    pops = list(set(sample_map.values()))
+    pop1, pop2 = sample_map.get(sample1), sample_map.get(sample2)
+    if pop1 != pop2:
+        state = 3
+    elif pop1 == pops[0] and pop1 == pop2:
+        state = 1
+    elif pop1 == pops[1] and pop1 == pop2:
+        state = 2
+    else:
+        raise ValueError
+
+    return state
+
+
+def get_s_distr(blocks_df, state):
+    """Compute partial distribution of segregating sites from dataframe of blocks."""
+    s_counter = Counter(blocks_df["NumSegSites"][blocks_df["state"] == state])
+    s_max = max(s_counter.keys()) + 1
+    s_arr = np.zeros(s_max)
+    s_arr[list(s_counter.keys())] = list(s_counter.values())
+    return s_arr
+
+
+def segregating_sites_distribution(blocks, sample_map, save_blocks_bed="blocks_with_state.bed", save_distr_npz="s_distr.npz"):
+    """Compute distribution of segregating sites from PyRanges/BED/dataframe of blocks"""
+
+    if type(blocks) is str:
+        blocks = pr.read_bed(blocks)
+
+    if type(blocks) is pr.PyRanges:
+        blocks = blocks.df
+
+    blocks["state"] = blocks.apply(lambda row: determine_state(row[3], row[4], sample_map), axis=1)
+    if save_blocks_bed is not None and save_blocks_bed is not False:
+        pr.PyRanges(blocks).to_bed(save_blocks_bed)
+
+    s1, s2, s3 = [get_s_distr(blocks, i) for i in [1,2,3]]
+    if save_distr_npz is not None and save_distr_npz is not False:
+                    np.savez(save_distr_npz, 
+                     s1=s1, 
+                     s2=s2, 
+                     s3=s3)
+                    
+    return s1, s2, s3
+            
+
     

@@ -3,8 +3,12 @@ import scipy
 from scipy.special import rel_entr
 from dismal.demography import Epoch
 from dismal.model_instance import ModelInstance
+from dismal.modelsimulation import ModelSimulation
 from dismal.demesrepresentation import DemesRepresentation
 import warnings
+import tqdm
+
+np.set_printoptions(suppress=True)
 
 class DemographicModel:
 
@@ -24,6 +28,7 @@ class DemographicModel:
 
         self.modelinstance = None
         self.negll = None
+        self.aic = None
         self.claic = None
         self.inferred_params = None
         self.optim_object = None
@@ -132,6 +137,7 @@ class DemographicModel:
 
         self.modelinstance = ModelInstance(optimised.x, self.epochs)
         self.negll = optimised.fun
+        self.aic = 2*self.n_params - 2*self.negll
         self.claic = self.cl_akaike(optimised)
         self.stderr = self.standard_err(optimised)
         self.inferred_params = optimised.x
@@ -248,6 +254,19 @@ class DemographicModel:
                           in list(zip(fitted_sdists, observed_sdists))])
         
         return kldiv
+    
+    def bootstrap_mle(self, mutation_rate, recombination_rate, blocklen, n_bootstraps=100):
+        """Perform bootstrapping from MLE of fitted model"""
+        res = []
+        for _ in tqdm.tqdm(range(n_bootstraps)):
+            try:
+                sim = modelsimulation.ModelSimulation(self.modelinstance, mutation_rate=mutation_rate, recombination_rate=recombination_rate, blocklen=blocklen)
+                refit_mod = self.fit_model(sim.s1, sim.s2, sim.s3)
+                res.append(refit_mod.inferred_params)
+            except RuntimeError:
+                continue
+
+        return np.array(res)
         
 
 

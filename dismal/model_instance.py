@@ -9,6 +9,7 @@ from dismal.print_results import print_output
 from dismal.modelsimulation import ModelSimulation
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+np.set_printoptions(suppress=True)
 
 
 class ModelInstance:

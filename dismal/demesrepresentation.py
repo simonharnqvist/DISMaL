@@ -2,7 +2,6 @@ import demes
 import numpy as np
 import demesdraw
 import msprime
-from dismal.simulate import make_treeseqs, generate_seg_sites_distr
 
 class DemesRepresentation:
 
@@ -78,23 +77,5 @@ class DemesRepresentation:
         return msprime.Demography.from_demes(self.graph)
 
 
-    def simulate_seg_sites(self, recombination_rate=None, num_blocks=20_000):
-        """Create segregating sites distributions using coalescent simulations"""
-        (treeseqs_state1,
-        treeseqs_state2,
-        treeseqs_state3) = [make_treeseqs(demography = self.as_msprime_demography(), 
-                                       state = state, 
-                                       blocklen=self.blocklen, 
-                                       recombination_rate=recombination_rate, 
-                                       num_blocks=num_blocks) for state in [1, 2, 3]]
-        
-        s1, s2, s3 = [generate_seg_sites_distr(treeseqs, 
-                                               mutation_rate=self.mutation_rate, 
-                                               infinite_sites=True) 
-                                               for treeseqs in
-                                               [treeseqs_state1, treeseqs_state2, treeseqs_state3]]
-        
-        return s1, s2, s3
-        
 
 
