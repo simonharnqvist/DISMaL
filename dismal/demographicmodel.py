@@ -7,6 +7,7 @@ from dismal.modelsimulation import ModelSimulation
 from dismal.demesrepresentation import DemesRepresentation
 import warnings
 import tqdm
+from copy import deepcopy
 
 np.set_printoptions(suppress=True)
 
@@ -33,6 +34,7 @@ class DemographicModel:
         self.inferred_params = None
         self.optim_object = None
         self.stderr = None
+        self.bootstraps = None
 
         self.demes_representation = None
 
@@ -82,9 +84,9 @@ class DemographicModel:
         return thetas_iv + epoch_duration_iv + mig_iv
     
 
-    def _get_bounds(self, theta_bounds=(1e-3, None), 
-                    epoch_duration_bounds=(1e-3, None), 
-                    mig_bounds=(1e-5, None)):
+    def _get_bounds(self, theta_bounds=(1e-10, None), 
+                    epoch_duration_bounds=(1e-10, None), 
+                    mig_bounds=(0, None)):
         """Generate list of (lower, upper) bound tuples for parameter estimation"""
         thetas_bounds = [theta_bounds] * self.n_theta_params
         epoch_durations_bounds = [epoch_duration_bounds] * self.n_epoch_durations
@@ -105,7 +107,8 @@ class DemographicModel:
         return lnl
 
     
-    def fit_model(self, s1, s2, s3, initial_values=None, bounds=None, optimisers=None):
+    def fit_model(self, s1, s2, s3, initial_values=None,
+                   bounds=None, optimisers=None):
         """Fit model by minimising negative log-likelihood; return ModelInstance with optimised parameters"""
 
         if initial_values is None:
@@ -137,7 +140,7 @@ class DemographicModel:
 
         self.modelinstance = ModelInstance(optimised.x, self.epochs)
         self.negll = optimised.fun
-        self.aic = 2*self.n_params - 2*self.negll
+        self.aic = 2*self.n_params + 2*self.negll
         self.claic = self.cl_akaike(optimised)
         self.stderr = self.standard_err(optimised)
         self.inferred_params = optimised.x
@@ -151,13 +154,13 @@ class DemographicModel:
 
         thetas = self.inferred_params[0:self.n_theta_params]
         if any(thetas <= 1e-3):
-            warnings.warn("One or more of your theta values is at the lower bound. Consider increasing the blocklength. Interpret results with great caution.")
+            warnings.warn("One or more of your theta values is very low. Consider increasing the blocklength. Interpret results with great caution.")
         if any(thetas >= 20):
             warnings.warn("One or more of your theta values is much greater than expected. Consider decreasing the block length. Interpret results with great caution.")
 
         epoch_durations = self.inferred_params[self.n_theta_params:(self.n_theta_params+self.n_epoch_durations)]
-        if any(epoch_durations <= 1e-3):
-            warnings.warn("One or more of your epoch duration values is at the lower bound. Interpret results with great caution.")
+        if any(epoch_durations <= 1e-5):
+            warnings.warn("One or more of your epoch duration values is very low. Interpret results with great caution.")
         if any(epoch_durations > 20):
             warnings.warn("One or more of your epoch duration values is much greater than expected. Interpret results with great caution.")
 
@@ -165,21 +168,25 @@ class DemographicModel:
             mig_rates = self.inferred_params[(self.n_theta_params+self.n_epoch_durations):]
             
             if any(mig_rates <= 1e-5):
-                warnings.warn("One or more of your migration rates is at the lower bound. Interpret results with great caution.")
+                warnings.warn("One or more of your migration rates is very low. Interpret results with great caution.")
             if any(mig_rates > 20):
                 warnings.warn("One or more of your migration rates is much greater than expected. Interpret results with great caution.")
-        
-
 
     
     def cl_akaike(self, optim_obj):
         """Calculate composite likelihood AIC from SciPy optimisation object"""
+        # Important note: it does not matter that hes and jac are from negative logl
+        # since they are multiplied together, yielding same result as if both were negated first
         if hasattr(optim_obj, "jac") and hasattr(optim_obj, "hess_inv"):
             if optim_obj.jac is not None and optim_obj.hess_inv is not None:
                 claic = (2*optim_obj.fun 
-                        + np.sum(optim_obj.hess_inv.matvec(optim_obj.jac))) # NB sum equiv to trace(diag)
+                        + 2*np.sum(optim_obj.hess_inv.matvec(optim_obj.jac))) # NB sum equiv to trace(diag)
         else:
             claic = None
+
+        if claic is not None:
+            if claic < 0:
+                claic = None
         
         return claic
     
@@ -192,27 +199,19 @@ class DemographicModel:
         return stderr
 
 
-    def demes_format(self, mutation_rate, blocklen):
+    def demes_format(self, mutation_rate, blocklen, log_time=True):
         """Represent model in Demes format"""
-        demes_rep = DemesRepresentation(self, mutation_rate=mutation_rate, blocklen=blocklen)
+        demes_rep = DemesRepresentation(self, mutation_rate=mutation_rate, blocklen=blocklen, log_time=True)
         self.demes_representation = demes_rep
         return demes_rep
 
 
-    def demesdraw(self, mutation_rate=None, blocklen=None):
+    def demesdraw(self, mutation_rate=None, blocklen=None, log_time=True):
         """Draw Demes model; convenience function for demes_format().drawing"""
         if self.demes_representation is None:
-            self.demes_representation = self.demes_format(mutation_rate=mutation_rate, blocklen=blocklen)
+            self.demes_representation = self.demes_format(mutation_rate=mutation_rate, blocklen=blocklen, log_time=log_time)
 
         return self.demes_representation.drawing
-
-
-    def demesgraph(self, mutation_rate=None, blocklen=None):
-        """Return Demes graph; convenience function for demes_format().graph"""
-        if self.demes_representation is None:
-            self.demes_representation = self.demes_format(mutation_rate=mutation_rate, blocklen=blocklen)
-
-        return self.demes_representation.graph
     
 
     def kldiv_fitted_true(self, true_modinst, s_max=500):
@@ -260,12 +259,21 @@ class DemographicModel:
         res = []
         for _ in tqdm.tqdm(range(n_bootstraps)):
             try:
-                sim = modelsimulation.ModelSimulation(self.modelinstance, mutation_rate=mutation_rate, recombination_rate=recombination_rate, blocklen=blocklen)
-                refit_mod = self.fit_model(sim.s1, sim.s2, sim.s3)
-                res.append(refit_mod.inferred_params)
+                sim = ModelSimulation(self.modelinstance, mutation_rate=mutation_rate, 
+                                      recombination_rate=recombination_rate, blocklen=blocklen)
+                new_mod = DemographicModel()
+                new_mod.epochs = self.epochs
+                new_mod.deme_ids = self.deme_ids
+                new_mod.n_epoch_durations = self.n_epoch_durations
+                new_mod.n_mig_params = self.n_mig_params
+                new_mod.n_theta_params = self.n_theta_params
+                new_mod.n_params = self.n_params
+                new_mod.fit_model(sim.s1, sim.s2, sim.s3)
+                res.append(new_mod.inferred_params)
             except RuntimeError:
                 continue
-
+        
+        self.bootstraps = np.array(res)
         return np.array(res)
         
 
