@@ -18,5 +18,6 @@ setup(
         "tqdm",
         "tskit",
         "prettytable"
-    ]
+    ],
+    long_description=open('README.rst').read(),
 )
