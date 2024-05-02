@@ -13,9 +13,7 @@ implementation of a generalised isolation-with-migration model.
 Theoretical Population Biology 140:1-15.
 https://doi.org/10.1016/j.tpb.2021.03.001.*
 
-**For documentation, please see the**
-`Wiki <https://github.com/simonharnqvist/DISMaL/wiki/1.-Home>`__
-
+**`Documentation is hosted on ReadTheDocs <https://dismal.readthedocs.io/en/latest/>`**
 Installation
 ------------
 
