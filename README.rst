@@ -13,7 +13,7 @@ implementation of a generalised isolation-with-migration model.
 Theoretical Population Biology 140:1-15.
 https://doi.org/10.1016/j.tpb.2021.03.001.*
 
-**Documentation is hosted on [ReadTheDocs](https://dismal.readthedocs.io/en/latest/)**
+**Documentation is hosted on ReadTheDocs: dismal.readthedocs.io**
 Installation
 ------------
 
