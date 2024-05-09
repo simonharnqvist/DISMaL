@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='dismal',
-    version='v0.1.16-beta',
+    version='v0.1.17-beta',
     packages=['dismal'],
     install_requires=[
         "numpy",
@@ -17,7 +17,8 @@ setup(
         "seaborn",
         "tqdm",
         "tskit",
-        "prettytable"
+        "prettytable",
+        "joblib"
     ],
     description="Demographic inference from the distribution of pairwise segregating sites",
     long_description=open('README.rst').read(),

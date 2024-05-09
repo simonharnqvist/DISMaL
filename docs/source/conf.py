@@ -22,7 +22,7 @@ copyright = '2024, Simon Harnqvist'
 author = 'Simon Harnqvist'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1.5'
+release = '0.1.17-beta'
 
 
 # -- General configuration ---------------------------------------------------
