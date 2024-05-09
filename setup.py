@@ -19,5 +19,6 @@ setup(
         "tskit",
         "prettytable"
     ],
+    description="Demographic inference from the distribution of pairwise segregating sites",
     long_description=open('README.rst').read(),
 )
