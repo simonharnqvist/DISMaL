@@ -19,10 +19,6 @@ Documentation is hosted on ReadTheDocs: https://dismal.readthedocs.io/en/latest/
 Installation
 ------------
 
-Install latest full release with Pip
-::
-   `pip install dismal`
+Install latest full release with Pip: `pip install dismal`
 
-Or the development version from GitHub
-::
-   `pip install git+https://github.com/simonharnqvist/DISMaL.git#egg=dismal`
+Or the development version from GitHub: `pip install git+https://github.com/simonharnqvist/DISMaL.git#egg=dismal`
