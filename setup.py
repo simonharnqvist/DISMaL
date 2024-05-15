@@ -8,7 +8,7 @@ setup(
         "numpy",
         "pandas",
         "setuptools",
-        "pyranges==0.0.129",  # bug in 0.1.0
+        "pyranges",
         "scikit-allel",
         "demes",
         "demesdraw",
