@@ -17,8 +17,6 @@ class DemesRepresentation:
 
         self.builder = self.generate_builder()
         self.graph = self.builder.resolve()
-        self.drawing = demesdraw.tubes(
-            self.graph, labels="xticks", log_time=log_time)
 
     @staticmethod
     def theta_to_Ne(block_theta, blocklen, mu):

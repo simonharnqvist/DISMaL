@@ -67,8 +67,10 @@ class MultiModel:
 
     def _fit_single_model(self, mod, s1, s2, s3):
         try:
-            return mod.fit_model(s1, s2, s3)
-        except RuntimeError:
+            mod.fit_model(s1, s2, s3)
+            return mod
+        except RuntimeError as e:
+            print(f"Model {mod.model_ref} failed: {e}")
             return None
 
     def _fit_models(self, s1, s2, s3, threads: int = 1) -> list:

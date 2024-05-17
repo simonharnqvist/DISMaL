@@ -8,10 +8,10 @@ from dismal.demesrepresentation import DemesRepresentation
 import warnings
 import tqdm
 from copy import deepcopy
+from joblib import Parallel, delayed
+import os
 
 np.set_printoptions(suppress=True)
-
-#  TODO: replace with DemographicModel from ABISS
 
 
 class DemographicModel:
@@ -29,6 +29,7 @@ class DemographicModel:
         self.n_theta_params = 0
         self.n_epoch_durations = -1  # 2 epochs -> 1 duration; 3 epochs -> 2 durations
         self.n_mig_params = 0
+        self.n_params = 0
 
         self.modelinstance = None
         self.negll = None
@@ -38,6 +39,7 @@ class DemographicModel:
         self.optim_object = None
         self.stderr = None
         self.bootstraps = None
+        self.optimiser = None
 
         self.demes_representation = None
 
@@ -227,20 +229,13 @@ class DemographicModel:
 
         return stderr
 
-    def demes_format(self, mutation_rate, blocklen, log_time=True):
-        """Represent model in Demes format - to be removed in next refactor"""
+    def as_demes(self, mutation_rate, blocklen, log_time=True):
+        """Represent model in Demes format"""
+        assert self.inferred_params is not None, "Model must be fitted before Demes conversion is possible"
         demes_rep = DemesRepresentation(
             self, mutation_rate=mutation_rate, blocklen=blocklen, log_time=log_time)
         self.demes_representation = demes_rep
-        return demes_rep
-
-    def demesdraw(self, mutation_rate=None, blocklen=None, log_time=True):
-        """Draw Demes model; convenience function for demes_format().drawing - to be removed in next refactor"""
-        if self.demes_representation is None:
-            self.demes_representation = self.demes_format(
-                mutation_rate=mutation_rate, blocklen=blocklen, log_time=log_time)
-
-        return self.demes_representation.drawing
+        return demes_rep.graph
 
     def kldiv_fitted_true(self, true_modinst: ModelInstance, s_max: int = 500):
         """Evaluate model fit (KL-divergence) against specified parameter set ModelInstance"""
@@ -283,10 +278,27 @@ class DemographicModel:
 
         return kldiv
 
-    def bootstrap_mle(self, mutation_rate: float,
-                      blocklen: int,  recombination_rate: float = 0,
-                      n_bootstraps: int = 100) -> np.array:
-        """_summary_
+    def _bootstrap_replicate(self, mutation_rate, recombination_rate, blocklen):
+        """Run single bootstrap replicate"""
+        sim = ModelSimulation(self.modelinstance, mutation_rate=mutation_rate,
+                              recombination_rate=recombination_rate, blocklen=blocklen)
+        bs_mod = DemographicModel()
+        bs_mod.epochs = self.epochs
+        bs_mod.deme_ids = self.deme_ids
+        bs_mod.n_epoch_durations = self.n_epoch_durations
+        bs_mod.n_mig_params = self.n_mig_params
+        bs_mod.n_theta_params = self.n_theta_params
+
+        try:
+            bs_mod.fit_model(sim.s1, sim.s2, sim.s3)
+            bootstrap_values = list(bs_mod.inferred_params)
+        except RuntimeError:
+            bootstrap_values = [None]
+
+        return bootstrap_values
+
+    def bootstrap_mle(self, mutation_rate: float, recombination_rate: float, blocklen: int, n_bootstraps: int = 100, threads: int = 1) -> np.array:
+        """Nonparametric bootstraps from maximum likelihood estimate.
 
         :param mutation_rate: Mutation rate
         :type mutation_rate: float
@@ -296,26 +308,19 @@ class DemographicModel:
         :type blocklen: int
         :param n_bootstraps: Number of bootstrap replicates, defaults to 100
         :type n_bootstraps: int, optional
+        :param threads: Number of threads to use (if < 1, threads = os.cpu_count - threads), defaults to 1
+        :type threads: int
         :return: Bootstrap values
         :rtype: np.array
         """
 
-        res = []
-        for _ in tqdm.tqdm(range(n_bootstraps)):
-            try:
-                sim = ModelSimulation(self.modelinstance, mutation_rate=mutation_rate,
-                                      recombination_rate=recombination_rate, blocklen=blocklen)
-                new_mod = DemographicModel()
-                new_mod.epochs = self.epochs
-                new_mod.deme_ids = self.deme_ids
-                new_mod.n_epoch_durations = self.n_epoch_durations
-                new_mod.n_mig_params = self.n_mig_params
-                new_mod.n_theta_params = self.n_theta_params
-                new_mod.n_params = self.n_params
-                new_mod.fit_model(sim.s1, sim.s2, sim.s3)
-                res.append(new_mod.inferred_params)
-            except RuntimeError:
-                continue
+        if threads < 1:
+            threads = os.cpu_count - threads
 
-        self.bootstraps = np.array(res)
-        return np.array(res)
+        bootstraps = list(tqdm.tqdm(Parallel(n_jobs=threads, prefer="processes", return_as="generator")(
+            delayed(self._bootstrap_replicate)(mutation_rate,
+                                               recombination_rate,
+                                               blocklen)
+            for _ in range(n_bootstraps)), total=n_bootstraps))
+
+        return bootstraps
